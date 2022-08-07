@@ -11,7 +11,7 @@
 # 動作確認
 - Ubuntu 22.04
 ```
-git clone git@github.com:094-gengar/Noh.git
+git clone https://github.com/094-gengar/Noh.git
 cd ./Noh
 sh build.sh
 ./NohEval fib.noh
