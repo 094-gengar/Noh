@@ -18,7 +18,6 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 	qi::rule<Iterator, std::string(), Skipper> Ident;
 	qi::rule<Iterator, std::string()> _String;
 	qi::rule<Iterator, ast::BaseAst*()> String;
-	// qi::rule<Iterator, std::vector<std::string>(), Skipper> Vars;
 	qi::rule<Iterator, ast::FuncAst*(), Skipper> Func;
 	qi::rule<Iterator, ast::ModuleAst*(), Skipper> Module;
 	qi::rule<Iterator, ast::BaseAst*(), Skipper> Stmt;
@@ -59,7 +58,13 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			| ("continue" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("continue")])
 			| ("exit" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("exit")])
 			| ("return" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("return")])
-			| ("print" >> Ident[_val = ph::new_<ast::BuiltinAst>("print"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])
+			| ("print" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("print")]
+				>> (Ident[ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))]
+					| Expr[ph::push_back(ph::at_c<1>(*_val), _1)]
+					| String[ph::push_back(ph::at_c<1>(*_val), _1)])
+				>> *(',' >> (Ident[ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))]
+					| Expr[ph::push_back(ph::at_c<1>(*_val), _1)]
+					| String[ph::push_back(ph::at_c<1>(*_val), _1)])))
 			| ("scani" >> Ident[_val = ph::new_<ast::BuiltinAst>("scani"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])
 			| ("scans" >> Ident[_val = ph::new_<ast::BuiltinAst>("scans"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])) >> ';';
 

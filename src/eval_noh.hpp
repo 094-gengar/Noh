@@ -27,7 +27,6 @@ struct AstEval {
 		"print",
 		"scan",
 
-		// "var",
 		"fn",
 		"if",
 		"then",
@@ -116,18 +115,29 @@ struct AstEval {
 		{
 			for(auto& arg : ast->Args)
 			{
-				const auto& ident = static_cast<ast::IdentAst*>(arg)->getIdent();
-				if(ifExistini64Vals(ident))
+				if(arg->getID() == ast::IdentID)
 				{
-					std::cout << i64Vals.at(ident) << std::endl;
+					const auto& ident = static_cast<ast::IdentAst*>(arg)->getIdent();
+					if(ifExistini64Vals(ident))
+					{
+						std::cout << i64Vals.at(ident) << std::endl;
+					}
+					else if(ifExistinStringVals(ident))
+					{
+						std::cout << stringVals.at(ident) << std::endl;
+					}
+					else
+					{
+						assert(0 && "undefined ident");
+					}
 				}
-				else if(ifExistinStringVals(ident))
+				else if(arg->getID() == ast::StringID)
 				{
-					std::cout << stringVals.at(ident) << std::endl;
+					std::cout << static_cast<ast::StringAst*>(arg)->getVal() << std::endl;
 				}
 				else
 				{
-					assert(0 && "undefined ident");
+					std::cout << evalExpr(arg) << std::endl;
 				}
 			}
 		}

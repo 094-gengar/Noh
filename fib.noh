@@ -1,6 +1,5 @@
 fn main {
-	s = "fibonacchi seq:";
-	print s;
+	print "fibonacchi seq:";
 	prev = 0;
 	cur = 1;
 	for i in 0..10 {

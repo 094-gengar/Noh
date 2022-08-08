@@ -2,7 +2,6 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
-#include <vector>
 
 #include "parser_noh.hpp"
 #include "eval_noh.hpp"
