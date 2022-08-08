@@ -60,7 +60,8 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			| ("exit" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("exit")])
 			| ("return" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("return")])
 			| ("print" >> Ident[_val = ph::new_<ast::BuiltinAst>("print"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])
-			| ("scan" >> Ident[_val = ph::new_<ast::BuiltinAst>("scan"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])) >> ';';
+			| ("scani" >> Ident[_val = ph::new_<ast::BuiltinAst>("scani"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])
+			| ("scans" >> Ident[_val = ph::new_<ast::BuiltinAst>("scans"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])) >> ';';
 
 		IfStmt = "if" >> Expr[_val = ph::new_<ast::IfStmtAst>(), ph::at_c<0>(*_val) = _1]
 			>> '{' >> *Stmt[ph::push_back(ph::at_c<1>(*_val), _1)]
