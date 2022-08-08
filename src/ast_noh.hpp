@@ -14,6 +14,7 @@ enum AstID {
 	FuncID,
 	ModuleID,
 	NumberID,
+	StringID,
 	IdentID,
 	MonoExpID,
 	BinaryExpID,
@@ -51,7 +52,6 @@ public:
 
 class ModuleAst : public BaseAst {
 public:
-	//std::vector<std::string> Vars;
 	std::vector<FuncAst*> Funcs;
 
 	ModuleAst() : BaseAst(AstID::ModuleID)
@@ -60,7 +60,6 @@ public:
 	}
 	~ModuleAst() { for(auto p : this->Funcs) { delete p; } }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ModuleID; }
-	//std::vector<std::string>& getVars() { return this->Vars; }
 	std::vector<FuncAst*>& getFuncs() { return this->Funcs; }
 };
 
@@ -72,7 +71,35 @@ public:
 		if constexpr (isDebug) { std::cerr << "NumberAst(" << this << ") " << Val << std::endl; }
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::NumberID; }
-	std::int_fast64_t getVal() { return this->Val; }
+	std::int_fast64_t& getVal() { return this->Val; }
+};
+
+class StringAst : public BaseAst {
+	std::string Val;
+public:
+	StringAst(const std::string& val) : BaseAst(AstID::StringID), Val()
+	{
+		if constexpr(isDebug) { std::cerr << "StringAst(" << this << ") " << val << std::endl; }
+		const std::uint_fast32_t siz = val.size();
+		for(std::uint_fast32_t i{}; i < siz; i++)
+		{
+			if(i == siz - 1) { Val += val[i]; continue;}
+			
+			if(val[i] == '\\' and val[i + 1] == '0') { Val += '\0'; }
+			else if(val[i] == '\\' and val[i + 1] == 'a') { Val += '\a'; i++; }
+			else if(val[i] == '\\' and val[i + 1] == 'b') { Val += '\b'; i++; }
+			else if(val[i] == '\\' and val[i + 1] == 'f') { Val += '\f'; i++; }
+			else if(val[i] == '\\' and val[i + 1] == 'n') { Val += '\n'; i++; }
+			else if(val[i] == '\\' and val[i + 1] == 'r') { Val += '\r'; i++; }
+			else if(val[i] == '\\' and val[i + 1] == 't') { Val += '\t'; i++; }
+			else if(val[i] == '\\' and val[i + 1] == 'v') { Val += '\v'; i++; }
+			else if(val[i] == '\\' and val[i + 1] == '\\') { Val += '\\'; i++; }
+			else if(val[i] == '\\')continue;
+			else Val += val[i];
+		}
+	}
+	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::StringID; }
+	std::string getVal() { return this->Val; }
 };
 
 class IdentAst : public BaseAst {
@@ -165,8 +192,8 @@ public:
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::IfStmtID; }
 	BaseAst* getCond() { return this->Cond; }
-	std::vector<BaseAst*> getThenStmt() { return this->ThenStmt; }
-	std::vector<BaseAst*> getElseStmt() { return this->ElseStmt; }
+	std::vector<BaseAst*>& getThenStmt() { return this->ThenStmt; }
+	std::vector<BaseAst*>& getElseStmt() { return this->ElseStmt; }
 };
 
 class WhileStmtAst : public BaseAst {
@@ -223,9 +250,9 @@ public:
 		for(auto s : this->Stmts) { delete s; }
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ForStmtID; }
-	std::string getIdent() { return this->Ident; }
+	std::string& getIdent() { return this->Ident; }
 	RangeAst* getRange() { return this->Range; }
-	std::vector<BaseAst*> getStmts() { return this->Stmts; }
+	std::vector<BaseAst*>& getStmts() { return this->Stmts; }
 };
 
 } // namespace ast
@@ -234,7 +261,6 @@ public:
 
 BOOST_FUSION_ADAPT_STRUCT(
 	Noh::ast::ModuleAst,
-	//(std::vector<std::string>, Vars)
 	(std::vector<Noh::ast::FuncAst*>, Funcs)
 )
 BOOST_FUSION_ADAPT_STRUCT(

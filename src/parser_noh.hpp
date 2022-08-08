@@ -16,7 +16,8 @@ namespace parser {
 template<class Iterator, class Skipper>
 struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 	qi::rule<Iterator, std::string(), Skipper> Ident;
-	// qi::rule<Iterator, std::string(), Skipper> String;
+	qi::rule<Iterator, std::string()> _String;
+	qi::rule<Iterator, ast::BaseAst*()> String;
 	// qi::rule<Iterator, std::vector<std::string>(), Skipper> Vars;
 	qi::rule<Iterator, ast::FuncAst*(), Skipper> Func;
 	qi::rule<Iterator, ast::ModuleAst*(), Skipper> Module;
@@ -33,13 +34,16 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 
 	Calc() : Calc::base_type(Module)
 	{
-		// Module = Vars[_val = ph::new_<ast::ModuleAst>(), ph::at_c<0>(*_val) = _1] >> *(Func[ph::push_back(ph::at_c<1>(*_val), _1)]);
 		Module = qi::eps[_val = ph::new_<ast::ModuleAst>()] >> *(Func[ph::push_back(ph::at_c<0>(*_val), _1)]);
 
 		Ident = qi::lexeme[(qi::alpha | qi::char_('_'))[_val = _1] >> *((qi::alnum | qi::char_('_'))[_val += _1])];
 
-		// Vars = "var" >> Ident[ph::push_back(_val, _1)] >> *(',' >> Ident[ph::push_back(_val, _1)]) >> ';';
-		// String = qi::raw['\"'[_val = ""] >> *(('\\'[_val += '\\'] >> qi::char_[_val += _1]) | !(qi::char_('\"'))[_val += _1]) >> '\"'];
+		_String = qi::char_('\"')[_val = ""]
+			>> *((qi::char_('\\')[_val += '\\'] >> qi::char_[_val += _1])
+				| (qi::char_ - qi::char_('\"'))[_val += _1])
+			>> qi::char_('\"');
+		
+		String = _String[_val = ph::new_<ast::StringAst>(_1)];
 		// Array = '[' >> *(Expr >> ',') >> ']';
 
 		Range = Expr[_val = ph::new_<ast::RangeAst>(), ph::at_c<0>(*_val) = _1] >> ".." >> Expr[ph::at_c<1>(*_val) = _1];
@@ -48,7 +52,7 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 
 		Stmt = Builtin | IfStmt | WhileStmt | ForStmt | Assign;
 
-		Assign = Ident[_val = ph::new_<ast::AssignAst>(_1)] >> '=' >> Expr[ph::at_c<1>(*_val) = _1] >> ';';
+		Assign = Ident[_val = ph::new_<ast::AssignAst>(_1)] >> '=' >> (Expr | String)[ph::at_c<1>(*_val) = _1] >> ';';
 
 		Builtin =
 			 (("break" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("break")])
