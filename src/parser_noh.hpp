@@ -59,8 +59,8 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			>> '{' >> *Stmt[ph::push_back(ph::at_c<1>(*_val), _1)]
 			>> -(qi::char_('}') >> "else" >> '{' >> *Stmt[ph::push_back(ph::at_c<2>(*_val), _1)]) >> '}';
 
-		WhileStmt = "while" >> Expr[_val = ph::new_<ast::WhileStmtAst>(), ph::at_c<0>(*_val) = _1] >> "{"
-			>> *Stmt[ph::push_back(ph::at_c<1>(*_val), _1)] >> '}';
+		WhileStmt = "while" >> Expr[_val = ph::new_<ast::WhileStmtAst>(), ph::at_c<0>(*_val) = _1]
+			>> "{" >> *Stmt[ph::push_back(ph::at_c<1>(*_val), _1)] >> '}';
 		
 		ForStmt = "for" >> Ident[_val = ph::new_<ast::ForStmtAst>(), ph::at_c<0>(*_val) = _1] >> "in" >> Range[ph::at_c<1>(*_val) = _1]
 			>> '{' >> *Stmt[ph::push_back(ph::at_c<2>(*_val), _1)] >> '}';

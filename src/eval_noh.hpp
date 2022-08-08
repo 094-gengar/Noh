@@ -27,7 +27,7 @@ struct AstEval {
 		"print",
 		"scan",
 
-		"var",
+		// "var",
 		"fn",
 		"if",
 		"then",
@@ -96,6 +96,10 @@ struct AstEval {
 		{
 			evalWhileStmtAst(static_cast<ast::WhileStmtAst*>(ast));
 		}
+		else if(ast->getID() == ast::ForStmtID)
+		{
+			evalForStmtAst(static_cast<ast::ForStmtAst*>(ast));
+		}
 		else
 		{
 			assert(0 && "illegal ast");
@@ -160,7 +164,6 @@ struct AstEval {
 		if(ifExit)return;
 		while(evalExpr(ast->getCond()))
 		{
-			restart:;
 			for(auto stmt : ast->getLoopStmt())
 			{
 				evalStmts(stmt);
@@ -172,11 +175,43 @@ struct AstEval {
 				if(ifContinue)
 				{
 					ifContinue = false;
-					goto restart;
+					break;
 				}
 				if(ifExit)return;
 			}
 		}
+	}
+
+	void evalForStmtAst(ast::ForStmtAst* ast)
+	{
+		if(ifExit)return;
+		auto name = ast->getIdent();
+		bool existVal = vals.find(name) != std::end(vals);
+		std::int_fast64_t tmp{};
+		if(existVal) { tmp = vals[name]; }
+
+		for(vals[name] = evalExpr(ast->getRange()->getFrom()); \
+			vals[name] < evalExpr(ast->getRange()->getTo()); vals[name]++)
+		{
+			for(auto stmt : ast->getStmts())
+			{
+				evalStmts(stmt);
+				if(ifBreak)
+				{
+					ifBreak = false;
+					return;
+				}
+				if(ifContinue)
+				{
+					ifContinue = false;
+					break;
+				}
+				if(ifExit)return;
+			}
+		}
+
+		if(existVal) { vals[name] = tmp; }
+		else { vals.erase(name); }
 	}
 
 	std::int_fast64_t evalExpr(ast::BaseAst* ast)
