@@ -1,12 +1,10 @@
 fn main {
-	i = 1;
 	prev = 0;
 	cur = 1;
-	while i <= 10 {
+	for i in 0..10 {
 		print cur;
 		tmp = prev;
 		prev = cur;
 		cur = tmp + cur;
-		i = i + 1;
 	}
 }

@@ -16,6 +16,7 @@ namespace parser {
 template<class Iterator, class Skipper>
 struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 	qi::rule<Iterator, std::string(), Skipper> Ident;
+	// qi::rule<Iterator, std::string(), Skipper> String;
 	// qi::rule<Iterator, std::vector<std::string>(), Skipper> Vars;
 	qi::rule<Iterator, ast::FuncAst*(), Skipper> Func;
 	qi::rule<Iterator, ast::ModuleAst*(), Skipper> Module;
@@ -38,6 +39,8 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 		Ident = qi::lexeme[(qi::alpha | qi::char_('_'))[_val = _1] >> *((qi::alnum | qi::char_('_'))[_val += _1])];
 
 		// Vars = "var" >> Ident[ph::push_back(_val, _1)] >> *(',' >> Ident[ph::push_back(_val, _1)]) >> ';';
+		// String = qi::raw['\"'[_val = ""] >> *(('\\'[_val += '\\'] >> qi::char_[_val += _1]) | !(qi::char_('\"'))[_val += _1]) >> '\"'];
+		// Array = '[' >> *(Expr >> ',') >> ']';
 
 		Range = Expr[_val = ph::new_<ast::RangeAst>(), ph::at_c<0>(*_val) = _1] >> ".." >> Expr[ph::at_c<1>(*_val) = _1];
 
