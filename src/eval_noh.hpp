@@ -48,11 +48,13 @@ struct AstEval {
 
 	void evalModuleAst(ast::ModuleAst* ast)
 	{
+		/*
 		for(const auto& var : ast->getVars())
 		{
 			assert(vals.find(var) == std::end(vals));
 			vals[var] = 0;
 		}
+		 */
 		for(auto func : ast->getFuncs())
 		{
 			auto funcName = func->getName();
@@ -119,7 +121,7 @@ struct AstEval {
 		{
 			for(auto arg : ast->Args)
 			{
-				std::cin >> vals.at(static_cast<ast::IdentAst*>(arg)->getIdent());
+				std::cin >> vals[static_cast<ast::IdentAst*>(arg)->getIdent()];
 			}
 		}
 	}
@@ -127,7 +129,7 @@ struct AstEval {
 	void evalAssignAst(ast::AssignAst* ast)
 	{
 		if(ifExit)return;
-		vals.at(ast->getName()) = evalExpr(ast->getVal());
+		vals[ast->getName()] = evalExpr(ast->getVal());
 	}
 
 	void evalIfStmtAst(ast::IfStmtAst* ast)

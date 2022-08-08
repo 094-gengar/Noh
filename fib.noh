@@ -1,4 +1,3 @@
-var i, cur, prev, tmp;
 fn main {
 	i = 1;
 	prev = 0;

@@ -22,6 +22,8 @@ enum AstID {
 	StmtID,
 	IfStmtID,
 	WhileStmtID,
+	RangeID,
+	ForStmtID,
 };
 
 class BaseAst {
@@ -49,7 +51,7 @@ public:
 
 class ModuleAst : public BaseAst {
 public:
-	std::vector<std::string> Vars;
+	//std::vector<std::string> Vars;
 	std::vector<FuncAst*> Funcs;
 
 	ModuleAst() : BaseAst(AstID::ModuleID)
@@ -58,7 +60,7 @@ public:
 	}
 	~ModuleAst() { for(auto p : this->Funcs) { delete p; } }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ModuleID; }
-	std::vector<std::string>& getVars() { return this->Vars; }
+	//std::vector<std::string>& getVars() { return this->Vars; }
 	std::vector<FuncAst*>& getFuncs() { return this->Funcs; }
 };
 
@@ -185,14 +187,54 @@ public:
 	BaseAst* getCond() { return this->Cond; }
 	std::vector<BaseAst*>& getLoopStmt() { return this->LoopStmt; }
 };
+
+class RangeAst : public BaseAst {
+public:
+	BaseAst* From;
+	BaseAst* To;
+
+	RangeAst() : BaseAst(AstID::RangeID), From(), To()
+	{
+		if constexpr (isDebug) { std::cerr << "RangeAst(" << this << ")" << std::endl; }
+	}
+	~RangeAst()
+	{
+		delete this->From;
+		delete this->To;
+	}
+	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::RangeID; }
+	BaseAst* getFrom() { return this->From; }
+	BaseAst* getTo() { return this->To; }
+};
+
+class ForStmtAst : public BaseAst {
+public:
+	std::string Ident;
+	RangeAst* Range;
+	std::vector<BaseAst*> Stmts;
+
+	ForStmtAst() : BaseAst(AstID::ForStmtID), Ident(), Range(), Stmts()
+	{
+		if constexpr (isDebug) { std::cerr << "ForStmtAst(" << this << ")" << std::endl; }
+	}
+	~ForStmtAst()
+	{
+		delete this->Range;
+		for(auto s : this->Stmts) { delete s; }
+	}
+	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ForStmtID; }
+	std::string getIdent() { return this->Ident; }
+	RangeAst* getRange() { return this->Range; }
+	std::vector<BaseAst*> getStmts() { return this->Stmts; }
+};
+
 } // namespace ast
 } // namespace Noh
 
 
-
 BOOST_FUSION_ADAPT_STRUCT(
 	Noh::ast::ModuleAst,
-	(std::vector<std::string>, Vars)
+	//(std::vector<std::string>, Vars)
 	(std::vector<Noh::ast::FuncAst*>, Funcs)
 )
 BOOST_FUSION_ADAPT_STRUCT(
@@ -220,4 +262,15 @@ BOOST_FUSION_ADAPT_STRUCT(
 	Noh::ast::WhileStmtAst,
 	(Noh::ast::BaseAst*, Cond)
 	(std::vector<Noh::ast::BaseAst*>, LoopStmt)
+)
+BOOST_FUSION_ADAPT_STRUCT(
+	Noh::ast::RangeAst,
+	(Noh::ast::BaseAst*, From)
+	(Noh::ast::BaseAst*, To)
+)
+BOOST_FUSION_ADAPT_STRUCT(
+	Noh::ast::ForStmtAst,
+	(std::string, Ident)
+	(Noh::ast::RangeAst*, Range)
+	(std::vector<Noh::ast::BaseAst*>, Stmts)
 )
