@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <iostream>
 #include <vector>
+#include <utility>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -25,17 +26,20 @@ struct AstEval {
 		"exit",
 		"return",
 		"print",
-		"scan",
+		"scani",
+		"scans",
 
+		"var"
 		"fn",
 		"if",
 		"then",
 		"else",
 		"end",
-		"while"
+		"while",
+		"for"
 	};
 	std::unordered_map<std::string, std::int_fast64_t> i64Vals;
-	std::unordered_map<std::string, std::string> stringVals;
+	std::unordered_map<std::string, std::string> StringVals;
 	std::unordered_map<std::string, ast::FuncAst*> funcs;
 
 	AstEval(ast::ModuleAst* ast) { evalModuleAst(ast); }
@@ -43,7 +47,7 @@ struct AstEval {
 	{
 		builtin.clear();
 		i64Vals.clear();
-		stringVals.clear();
+		StringVals.clear();
 		funcs.clear();
 	}
 
@@ -56,23 +60,79 @@ struct AstEval {
 			assert(builtin.find(funcName) == std::end(builtin));
 			funcs[funcName] = func;
 		}
-		if(funcs.find(std::string("main")) != std::end(funcs)) { evalFuncAst(funcs["main"]); }
-		else { assert(0 && "not found \"fn main\""); }
-	}
 
-	void evalFuncAst(ast::FuncAst* ast)
-	{
-		if(ifExit)return;
-		for(auto& stmts : ast->getInst())
+		if(funcs.find(std::string("main")) != std::end(funcs))
 		{
-			evalStmts(stmts);
-			if(ifExit)return;
-			if(ifReturn) { ifReturn = false; break; }
+			assert(funcs.at("main")->getParamNames().size() == 0);
+			evalFuncAst(funcs.at("main"), std::vector<ast::BaseAst*>{});
+		}
+		else
+		{
+			for(auto& func : ast->getFuncs())
+			{
+				if(func->getParamNames().size() == 0)
+				{
+					evalFuncAst(func, std::vector<ast::BaseAst*>{});
+					break;
+				}
+			}
 		}
 	}
 
+	void evalFuncAst(ast::FuncAst* ast, std::vector<ast::BaseAst*> params)
+	{
+		if(ifExit)return;
+		ifInFunc++;
+		assert(params.size() == ast->getParamNames().size());
+		auto paramNames = ast->getParamNames();
+		const auto& siz = params.size();
+		std::unordered_map<std::string, std::int_fast64_t> tmpi64Vals;
+		std::unordered_map<std::string, std::string> tmpStringVals;
+
+		for(size_t i{}; i < siz; i++)
+		{
+			if(auto r1 = evalExpr(params[i]); r1.second)
+			{
+				tmpi64Vals[paramNames[i]] = r1.first;
+			}
+			else if(auto r2 = evalStrExpr(params[i]); r2.second)
+			{
+				tmpStringVals[paramNames[i]] = r2.first;
+			}
+			else
+			{
+				assert(0 && "illegal argument");
+			}
+		}
+
+		std::swap(i64Vals, tmpi64Vals);
+		std::swap(StringVals, tmpStringVals);
+
+		{
+			for(auto& stmts : ast->getInst())
+			{
+				evalStmts(stmts);
+				if(ifExit)return;
+				if(ifReturn) { ifReturn = false; break; }
+			}
+		}
+
+		std::swap(i64Vals, tmpi64Vals);
+		std::swap(StringVals, tmpStringVals);
+		tmpi64Vals.clear();
+		tmpStringVals.clear();
+		ifInFunc--;
+	}
+
+	void evalCallAst(ast::CallAst* ast)
+	{
+		if(ifExit)return;
+		const auto& fnName = ast->getFuncName();
+		evalFuncAst(funcs[fnName], ast->getParams());
+	}
+
 	bool ifExistini64Vals(const std::string& s) { return i64Vals.find(s) != std::end(i64Vals); }
-	bool ifExistinStringVals(const std::string& s) { return stringVals.find(s) != std::end(stringVals); }
+	bool ifExistinStringVals(const std::string& s) { return StringVals.find(s) != std::end(StringVals); }
 
 	void evalStmts(ast::BaseAst* ast)
 	{
@@ -97,6 +157,10 @@ struct AstEval {
 		{
 			evalForStmtAst(static_cast<ast::ForStmtAst*>(ast));
 		}
+		else if(ast->getID() == ast::CallID)
+		{
+			evalCallAst(static_cast<ast::CallAst*>(ast));
+		}
 		else
 		{
 			assert(0 && "illegal ast");
@@ -115,34 +179,23 @@ struct AstEval {
 		{
 			for(auto& arg : ast->Args)
 			{
-				if(arg->getID() == ast::IdentID)
+				if(auto r1 = evalExpr(arg); r1.second)
 				{
-					const auto& ident = static_cast<ast::IdentAst*>(arg)->getIdent();
-					if(ifExistini64Vals(ident))
-					{
-						std::cout << i64Vals.at(ident) << std::endl;
-					}
-					else if(ifExistinStringVals(ident))
-					{
-						std::cout << stringVals.at(ident) << std::endl;
-					}
-					else
-					{
-						assert(0 && "undefined ident");
-					}
+					std::cout << r1.first << std::endl;
 				}
-				else if(arg->getID() == ast::StringID)
+				else if(auto r2 = evalStrExpr(arg); r2.second)
 				{
-					std::cout << static_cast<ast::StringAst*>(arg)->getVal() << std::endl;
+					std::cout << r2.first << std::endl;
 				}
 				else
 				{
-					std::cout << evalExpr(arg) << std::endl;
+					assert(0 && "illegal argument");
 				}
 			}
 		}
 		else if(builtinName == "scani")
 		{
+			if(ifExit)return;
 			for(auto& arg : ast->Args)
 			{
 				const auto& ident = static_cast<ast::IdentAst*>(arg)->getIdent();
@@ -155,6 +208,7 @@ struct AstEval {
 		}
 		else if(builtinName == "scans")
 		{
+			if(ifExit)return;
 			for(auto& arg : ast->Args)
 			{
 				const auto& ident = static_cast<ast::IdentAst*>(arg)->getIdent();
@@ -162,7 +216,7 @@ struct AstEval {
 				{
 					assert(0 && "cannot convert string to int");
 				}
-				std::cin >> stringVals[ident];
+				std::cin >> StringVals[ident];
 			}
 		}
 	}
@@ -170,34 +224,34 @@ struct AstEval {
 	void evalAssignAst(ast::AssignAst* ast)
 	{
 		if(ifExit)return;
-		if(ast->getVal()->getID() == ast::StringID)
-		{
-			if(ifExistini64Vals(ast->getName()))
-			{
-				assert(0 && "cannot convert string to int");
-			}
-			else
-			{
-				stringVals[ast->getName()] = static_cast<ast::StringAst*>(ast->getVal())->getVal();
-			}
-		}
-		else
+		const auto& ValAst = ast->getVal();
+		if(auto r1 = evalExpr(ValAst); r1.second)
 		{
 			if(ifExistinStringVals(ast->getName()))
 			{
 				assert(0 && "cannot convert int to string");
 			}
-			else
+			i64Vals[ast->getName()] = r1.first;
+		}
+		else if(auto r2 = evalStrExpr(ValAst); r2.second)
+		{
+			if(ifExistini64Vals(ast->getName()))
 			{
-				i64Vals[ast->getName()] = evalExpr(ast->getVal());
+				assert(0 && "cannot convert string to int");
 			}
+			StringVals[ast->getName()] = r2.first;
+		}
+		else
+		{
+			assert(0 && "illegal argument");
 		}
 	}
 
 	void evalIfStmtAst(ast::IfStmtAst* ast)
 	{
 		if(ifExit)return;
-		const auto CondEval = evalExpr(ast->Cond);
+		const auto[CondEval, flg] = evalExpr(ast->Cond);
+		assert(flg);
 		if(CondEval)
 		{
 			for(auto& stmt : ast->getThenStmt())
@@ -220,8 +274,11 @@ struct AstEval {
 	void evalWhileStmtAst(ast::WhileStmtAst* ast)
 	{
 		if(ifExit)return;
-		while(evalExpr(ast->getCond()))
+		ifInWhile++;
+		while(true)
 		{
+			const auto[CondEval, flg] = evalExpr(ast->getCond());
+			if(not (flg and CondEval))break;
 			for(auto& stmt : ast->getLoopStmt())
 			{
 				evalStmts(stmt);
@@ -238,6 +295,7 @@ struct AstEval {
 				if(ifExit)return;
 			}
 		}
+		ifInWhile--;
 	}
 
 	void evalForStmtAst(ast::ForStmtAst* ast)
@@ -247,9 +305,12 @@ struct AstEval {
 		bool existVal = i64Vals.find(name) != std::end(i64Vals);
 		std::int_fast64_t tmp{};
 		if(existVal) { tmp = i64Vals[name]; }
+		const auto[fromEval, fromFlg] = evalExpr(ast->getRange()->getFrom());
+		const auto[toEval, toFlg] = evalExpr(ast->getRange()->getTo());
+		assert(fromFlg and toFlg);
 
-		for(i64Vals[name] = evalExpr(ast->getRange()->getFrom()); \
-			i64Vals[name] < evalExpr(ast->getRange()->getTo()); i64Vals[name]++)
+		for(i64Vals[name] = fromEval; \
+			i64Vals[name] < toEval; i64Vals[name]++)
 		{
 			for(auto& stmt : ast->getStmts())
 			{
@@ -272,28 +333,59 @@ struct AstEval {
 		else { i64Vals.erase(name); }
 	}
 
-	std::int_fast64_t evalExpr(ast::BaseAst* ast)
+	std::pair<std::string, bool> evalStrExpr(ast::BaseAst* ast)
 	{
-		if(ast->getID() == ast::NumberID)
+		if(ast->getID() == ast::StringID)
 		{
-			return evalNumberAst(static_cast<ast::NumberAst*>(ast));
+			return std::make_pair(evalStringAst(static_cast<ast::StringAst*>(ast)), true);
 		}
 		else if(ast->getID() == ast::IdentID)
 		{
-			return i64Vals.at(static_cast<ast::IdentAst*>(ast)->getIdent());
+			const auto& name = static_cast<ast::IdentAst*>(ast)->getIdent();
+			if(not ifExistini64Vals(name))
+			{
+				return std::make_pair(StringVals.at(name), true);
+			}
+		}
+		else // otherwise
+		{
+			return std::make_pair("!match", false);
+		}
+		return std::make_pair("!match", false);
+	}
+
+	std::string evalStringAst(ast::StringAst* ast)
+	{
+		return ast->getVal();
+	}
+
+	std::pair<std::int_fast64_t, bool> evalExpr(ast::BaseAst* ast)
+	{
+		if(ast->getID() == ast::NumberID)
+		{
+			return std::make_pair(evalNumberAst(static_cast<ast::NumberAst*>(ast)), true);
+		}
+		else if(ast->getID() == ast::IdentID)
+		{
+			const auto& name = static_cast<ast::IdentAst*>(ast)->getIdent();
+			if(not ifExistinStringVals(name))
+			{
+				return std::make_pair(i64Vals.at(name), true);
+			}
 		}
 		else if(ast->getID() == ast::BinaryExpID)
 		{
-			return evalBinaryExpAst(static_cast<ast::BinaryExpAst*>(ast));
+			return std::make_pair(evalBinaryExpAst(static_cast<ast::BinaryExpAst*>(ast)), true);
 		}
 		else if(ast->getID() == ast::MonoExpID)
 		{
-			return evalMonoExpAst(static_cast<ast::MonoExpAst*>(ast));
+			return std::make_pair(evalMonoExpAst(static_cast<ast::MonoExpAst*>(ast)), true);
 		}
 		else // otherwize
 		{
-			assert(0 && "no match");
+			return std::make_pair(-1, false);
 		}
+		return std::make_pair(-1, false);
 	}
 
 	std::int_fast64_t evalNumberAst(ast::NumberAst* ast)

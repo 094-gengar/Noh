@@ -12,6 +12,7 @@ namespace ast {
 enum AstID {
 	BaseID,
 	FuncID,
+	CallID,
 	ModuleID,
 	NumberID,
 	StringID,
@@ -38,16 +39,35 @@ public:
 class FuncAst : public BaseAst {
 public:
 	std::string Name;
+	std::vector<std::string> ParamNames;
 	std::vector<BaseAst*> Inst;
 
 	FuncAst(const std::string& name) : BaseAst(AstID::FuncID), Name(name)
 	{
 		if constexpr (isDebug) { std::cerr << "FuncAst(" << this << ") " << name << std::endl; }
 	}
-	~FuncAst() { for(auto ptr : this->Inst) { delete ptr; } }
+	~FuncAst()
+	{
+		for(auto ptr : this->Inst) { delete ptr; }
+	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::FuncID; }
 	std::string& getName() { return this->Name; }
+	std::vector<std::string>& getParamNames() { return this->ParamNames; }
 	std::vector<BaseAst*>& getInst() { return this->Inst; }
+};
+
+class CallAst : public BaseAst {
+public:
+	std::string FuncName;
+	std::vector<BaseAst*> Params;
+
+	CallAst(const std::string& name) : BaseAst(AstID::CallID), FuncName(name)
+	{
+		if constexpr (isDebug) { std::cerr << "CallAst(" << this << ") " << FuncName << std::endl; }
+	}
+	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::CallID; }
+	std::string& getFuncName() { return this->FuncName; }
+	std::vector<BaseAst*>& getParams() { return this->Params; }
 };
 
 class ModuleAst : public BaseAst {
@@ -56,7 +76,7 @@ public:
 
 	ModuleAst() : BaseAst(AstID::ModuleID)
 	{
-		if constexpr (isDebug) { std::cerr << "ModuleAst(" << this << ") " << std::endl; }
+		if constexpr (isDebug) { std::cerr << "ModuleAst(" << this << ")" << std::endl; }
 	}
 	~ModuleAst() { for(auto p : this->Funcs) { delete p; } }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ModuleID; }
@@ -266,7 +286,13 @@ BOOST_FUSION_ADAPT_STRUCT(
 BOOST_FUSION_ADAPT_STRUCT(
 	Noh::ast::FuncAst,
 	(std::string, Name)
+	(std::vector<std::string>, ParamNames)
 	(std::vector<Noh::ast::BaseAst*>, Inst)
+)
+BOOST_FUSION_ADAPT_STRUCT(
+	Noh::ast::CallAst,
+	(std::string, FuncName)
+	(std::vector<Noh::ast::BaseAst*>, Params)
 )
 BOOST_FUSION_ADAPT_STRUCT(
 	Noh::ast::BuiltinAst,
