@@ -56,7 +56,7 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			>> '(' >> -((Expr[ph::push_back(ph::at_c<1>(*_val), _1)] | StringExpr[ph::push_back(ph::at_c<1>(*_val), _1)])
 			>> *(',' >> (Expr[ph::push_back(ph::at_c<1>(*_val), _1)] | StringExpr[ph::push_back(ph::at_c<1>(*_val), _1)]))) >> ')' >> ';';
 
-		Stmt = Builtin | IfStmt | WhileStmt | ForStmt | Call | Assign;
+		Stmt = Builtin | IfStmt | WhileStmt | ForStmt | Assign | Call;
 
 		Assign = "var" >> Ident[_val = ph::new_<ast::AssignAst>(_1)] >> '='
 			>> ((Expr | StringExpr)[ph::at_c<1>(*_val) = _1] | Ident[ph::at_c<1>(*_val) = ph::new_<ast::IdentAst>(_1)]) >> ';';

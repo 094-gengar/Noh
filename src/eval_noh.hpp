@@ -7,6 +7,7 @@
 #include <utility>
 #include <unordered_set>
 #include <unordered_map>
+#include <deque>
 
 #include "ast_noh.hpp"
 
@@ -14,12 +15,12 @@ namespace Noh {
 namespace eval {
 
 struct AstEval {
-	std::int_fast64_t ifInFunc = 0;
-	std::int_fast64_t ifInWhile = 0;
-	bool ifExit = false;
-	bool ifReturn = false;
-	bool ifBreak = false;
-	bool ifContinue = false;
+	bool ExitFlag = false;
+	bool ReturnFlag = false;
+	bool BreakFlag = false;
+	bool ContinueFlag = false;
+	std::uint32_t valsSize, FuncRecSize, curLower;
+
 	std::unordered_set<std::string> builtin = {
 		"break",
 		"continue",
@@ -29,7 +30,9 @@ struct AstEval {
 		"scani",
 		"scans",
 
-		"var"
+		"var",
+		"num",
+		"str",
 		"fn",
 		"if",
 		"then",
@@ -38,20 +41,136 @@ struct AstEval {
 		"while",
 		"for"
 	};
-	std::unordered_map<std::string, std::int_fast64_t> i64Vals;
-	std::unordered_map<std::string, std::string> StringVals;
+
+	std::deque<std::unordered_map<std::string, ast::BaseAst*>> vals;
 	std::unordered_map<std::string, ast::FuncAst*> funcs;
 
-	AstEval(ast::ModuleAst* ast) { evalModuleAst(ast); }
+	AstEval(ast::ModuleAst*& ast) : valsSize(0), FuncRecSize(0), curLower(0)
+	{
+		evalModuleAst(ast);
+	}
 	~AstEval()
 	{
 		builtin.clear();
-		i64Vals.clear();
-		StringVals.clear();
+		vals.clear();
 		funcs.clear();
 	}
 
-	void evalModuleAst(ast::ModuleAst* ast)
+	bool CanCastInNum(ast::BaseAst* ast)
+	{
+		switch(ast->getID()) {
+		case ast::NumberID:
+			return true;
+		case ast::BinaryExpID:
+			return true;
+		case ast::MonoExpID:
+			return true;
+		default:
+			return false;
+		}
+		return false;		
+	}
+
+	bool CanCastInNum(const ast::AstID& id)
+	{
+		switch(id) {
+		case ast::NumberID:
+			return true;
+		case ast::BinaryExpID:
+			return true;
+		case ast::MonoExpID:
+			return true;
+		default:
+			return false;
+		}
+		return false;		
+	}
+
+	bool CanCastInStr(ast::BaseAst* ast)
+	{
+		switch(ast->getID()) {
+		case ast::StringID:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	}
+
+	bool CanCastInStr(const ast::AstID& id)
+	{
+		switch(id) {
+		case ast::StringID:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	}
+
+	std::int_fast8_t CastAstIdx(ast::BaseAst* ast)
+	{
+		if(CanCastInNum(ast))
+		{
+			return 0;
+		}
+		else if(CanCastInStr(ast))
+		{
+			return 1;
+		}
+		return -1;	
+	}
+
+	std::int_fast8_t CastAstIdx(const ast::AstID& id)
+	{
+		if(CanCastInNum(id))
+		{
+			return 0;
+		}
+		else if(CanCastInStr(id))
+		{
+			return 1;
+		}
+		return -1;	
+	}
+
+	ast::AstID TypeOfIdentAst(ast::IdentAst* ast)
+	{
+		const auto& name = ast->getIdent();
+		for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+		{
+			if(vals[i].find(name) != std::end(vals[i]))
+			{
+				const auto& id = vals[i].at(name)->getID();
+				return id;
+			}
+		}
+		assert(0);
+	}
+
+	ast::AstID TypeOfIdentAst(ast::BaseAst* ast)
+	{
+		if(ast->getID() != ast::IdentID)
+		{
+			return ast::NoneID;
+		}
+		const auto& name = dynamic_cast<ast::IdentAst*>(ast)->getIdent();
+		for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+		{
+			if(vals[i].find(name) != std::end(vals[i]))
+			{
+				const auto& id = vals[i].at(name)->getID();
+				return id;
+			}
+		}
+		assert(0);
+	}
+
+	// ================
+	//      module
+	// ================
+
+	void evalModuleAst(ast::ModuleAst*& ast)
 	{
 		for(auto& func : ast->getFuncs())
 		{
@@ -60,7 +179,6 @@ struct AstEval {
 			assert(builtin.find(funcName) == std::end(builtin));
 			funcs[funcName] = func;
 		}
-
 		if(funcs.find(std::string("main")) != std::end(funcs))
 		{
 			assert(funcs.at("main")->getParamNames().size() == 0);
@@ -79,87 +197,81 @@ struct AstEval {
 		}
 	}
 
-	void evalFuncAst(ast::FuncAst* ast, std::vector<ast::BaseAst*> params)
+	// ================
+	//       func
+	// ================
+
+	void evalFuncAst(ast::FuncAst*& ast, std::vector<ast::BaseAst*> params)
 	{
-		if(ifExit)return;
-		ifInFunc++;
-		assert(params.size() == ast->getParamNames().size());
-		auto paramNames = ast->getParamNames();
+		if(ExitFlag)return;
 		const auto& siz = params.size();
-		std::unordered_map<std::string, std::int_fast64_t> tmpi64Vals;
-		std::unordered_map<std::string, std::string> tmpStringVals;
+		assert(siz == ast->getParamNames().size());
+		auto paramNames = ast->getParamNames();
+
+		vals.emplace_back(std::unordered_map<std::string, ast::BaseAst*>{});
+		valsSize++;
+		auto tmpLower = curLower;
+		curLower = valsSize - 1;
 
 		for(size_t i{}; i < siz; i++)
 		{
-			if(auto r1 = evalExpr(params[i]); r1.second)
-			{
-				tmpi64Vals[paramNames[i]] = r1.first;
-			}
-			else if(auto r2 = evalStrExpr(params[i]); r2.second)
-			{
-				tmpStringVals[paramNames[i]] = r2.first;
-			}
-			else
-			{
-				assert(0 && "illegal argument");
-			}
+			auto tmp = new ast::AssignAst{paramNames[i]};
+			tmp->Val = params[i];
+			evalAssignAst(tmp);
 		}
-
-		std::swap(i64Vals, tmpi64Vals);
-		std::swap(StringVals, tmpStringVals);
 
 		{
 			for(auto& stmts : ast->getInst())
 			{
 				evalStmts(stmts);
-				if(ifExit)return;
-				if(ifReturn) { ifReturn = false; break; }
+				if(ExitFlag)return;
+				if(ReturnFlag) { ReturnFlag = false; break; }
 			}
 		}
 
-		std::swap(i64Vals, tmpi64Vals);
-		std::swap(StringVals, tmpStringVals);
-		tmpi64Vals.clear();
-		tmpStringVals.clear();
-		ifInFunc--;
+		vals.back().clear();
+		vals.pop_back();
+		valsSize--;
+		curLower = tmpLower;
 	}
 
 	void evalCallAst(ast::CallAst* ast)
 	{
-		if(ifExit)return;
+		if(ExitFlag)return;
 		const auto& fnName = ast->getFuncName();
 		evalFuncAst(funcs[fnName], ast->getParams());
 	}
 
-	bool ifExistini64Vals(const std::string& s) { return i64Vals.find(s) != std::end(i64Vals); }
-	bool ifExistinStringVals(const std::string& s) { return StringVals.find(s) != std::end(StringVals); }
+	// ================
+	//      stmts
+	// ================
 
 	void evalStmts(ast::BaseAst* ast)
 	{
-		if(ifExit)return;
+		if(ExitFlag)return;
 		if(ast->getID() == ast::BuiltinID)
 		{
-			evalBuiltinAst(static_cast<ast::BuiltinAst*>(ast));
+			evalBuiltinAst(dynamic_cast<ast::BuiltinAst*>(ast));
 		}
 		else if(ast->getID() == ast::AssignID)
 		{
-			evalAssignAst(static_cast<ast::AssignAst*>(ast));
+			evalAssignAst(dynamic_cast<ast::AssignAst*>(ast));
 		}
 		else if(ast->getID() == ast::IfStmtID)
 		{
-			evalIfStmtAst(static_cast<ast::IfStmtAst*>(ast));
+			evalIfStmtAst(dynamic_cast<ast::IfStmtAst*>(ast));
 		}
 		else if(ast->getID() == ast::WhileStmtID)
 		{
-			evalWhileStmtAst(static_cast<ast::WhileStmtAst*>(ast));
+			evalWhileStmtAst(dynamic_cast<ast::WhileStmtAst*>(ast));
 		}
 		else if(ast->getID() == ast::ForStmtID)
 		{
-			evalForStmtAst(static_cast<ast::ForStmtAst*>(ast));
+			evalForStmtAst(dynamic_cast<ast::ForStmtAst*>(ast));
 		}
 		else if(ast->getID() == ast::CallID)
 		{
-			evalCallAst(static_cast<ast::CallAst*>(ast));
+			evalCallAst(dynamic_cast<ast::CallAst*>(ast));
 		}
 		else
 		{
@@ -167,91 +279,203 @@ struct AstEval {
 		}
 	}
 
+	// ================
+	//     builtin
+	// ================
+
 	void evalBuiltinAst(ast::BuiltinAst* ast)
 	{
-		if(ifExit)return;
+		if(ExitFlag)return;
 		const auto& builtinName = ast->getName();
-		if(builtinName == "break")ifBreak = true;
-		else if(builtinName == "continue")ifContinue = true;
-		else if(builtinName == "exit")ifExit = true;
-		else if(builtinName == "return")ifReturn = true;
+		if(builtinName == "break")BreakFlag = true;
+		else if(builtinName == "continue")ContinueFlag = true;
+		else if(builtinName == "exit")ExitFlag = true;
+		else if(builtinName == "return")ReturnFlag = true;
 		else if(builtinName == "print")
 		{
 			for(auto& arg : ast->Args)
 			{
-				if(auto r1 = evalExpr(arg); r1.second)
+				if(arg->getID() == ast::IdentID)
 				{
-					std::cout << r1.first << std::endl;
-				}
-				else if(auto r2 = evalStrExpr(arg); r2.second)
-				{
-					std::cout << r2.first << std::endl;
+					if(TypeOfIdentAst(arg) == ast::NumberID)
+					{
+						std::cout << evalNumExpr(arg) << std::endl;;
+					}
+					else if(TypeOfIdentAst(arg) == ast::StringID)
+					{
+						std::cout << evalStrExpr(arg) << std::endl;;
+					}
+					else
+					{
+						assert(0 && "unknown type");
+					}
 				}
 				else
 				{
-					assert(0 && "illegal argument");
+					if(CanCastInNum(arg))
+					{
+						std::cout << evalNumExpr(arg) << std::endl;;
+					}
+					else if(CanCastInStr(arg))
+					{
+						std::cout << evalStrExpr(arg) << std::endl;;
+					}
+					else
+					{
+						assert(0 && "unknown type");
+					}
 				}
 			}
 		}
 		else if(builtinName == "scani")
 		{
-			if(ifExit)return;
+			if(ExitFlag)return;
 			for(auto& arg : ast->Args)
 			{
-				const auto& ident = static_cast<ast::IdentAst*>(arg)->getIdent();
-				if(ifExistinStringVals(ident))
+				const auto& ident = dynamic_cast<ast::IdentAst*>(arg)->getIdent();
+	
+				for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
 				{
-					assert(0 && "cannot convert int to string");
+					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					{
+						if(CanCastInNum(vals[i].at(ast->getName())))
+						{
+							std::int_fast64_t tmp;
+							std::cin >> tmp;
+							vals[i].at(ast->getName()) = new ast::NumberAst(tmp);
+						}
+						else assert(0 && "different type");
+					}
 				}
-				std::cin >> i64Vals[ident];
 			}
 		}
 		else if(builtinName == "scans")
 		{
-			if(ifExit)return;
+			if(ExitFlag)return;
 			for(auto& arg : ast->Args)
 			{
-				const auto& ident = static_cast<ast::IdentAst*>(arg)->getIdent();
-				if(ifExistinStringVals(ident))
+				const auto& ident = dynamic_cast<ast::IdentAst*>(arg)->getIdent();
+	
+				for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
 				{
-					assert(0 && "cannot convert string to int");
+					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					{
+						if(CanCastInStr(vals[i].at(ast->getName())))
+						{
+							std::string tmp;
+							std::cin >> tmp;
+							vals[i].at(ast->getName()) = new ast::StringAst(tmp);
+						}
+						else assert(0 && "different type");
+					}
 				}
-				std::cin >> StringVals[ident];
 			}
 		}
 	}
+
+	// ================
+	//      assign
+	// ================
 
 	void evalAssignAst(ast::AssignAst* ast)
 	{
-		if(ifExit)return;
-		const auto& ValAst = ast->getVal();
-		if(auto r1 = evalExpr(ValAst); r1.second)
+		if(ExitFlag)return;
+		assert(builtin.find(ast->getName()) == std::end(builtin));
+		const auto& valAst = ast->getVal();
+		assert(not vals.empty());
+
+		if(vals.back().find(ast->getName()) != std::end(vals.back()))
 		{
-			if(ifExistinStringVals(ast->getName()))
+			if(CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(valAst) and \
+				CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(TypeOfIdentAst(valAst)))
 			{
-				assert(0 && "cannot convert int to string");
+				std::cerr << CastAstIdx(vals.back().at(ast->getName())) << std::endl;
+				std::cerr << CastAstIdx(valAst) << std::endl;
+				std::cerr << valAst->getID() << std::endl;
+				assert(0 && "different type");
 			}
-			i64Vals[ast->getName()] = r1.first;
-		}
-		else if(auto r2 = evalStrExpr(ValAst); r2.second)
-		{
-			if(ifExistini64Vals(ast->getName()))
+			else
 			{
-				assert(0 && "cannot convert string to int");
+				if(valAst->getID() == ast::IdentID)
+				{
+					if(TypeOfIdentAst(valAst) == ast::NumberID)
+					{
+						vals.back().at(ast->getName()) = new ast::NumberAst(evalNumExpr(valAst));
+					}
+					else if(TypeOfIdentAst(valAst) == ast::StringID)
+					{
+						vals.back().at(ast->getName()) = new ast::StringAst(evalStrExpr(valAst));
+					}
+					else
+					{
+						assert(0 && "unknown type");
+					}
+				}
+				else
+				{
+					if(CanCastInNum(valAst))
+					{
+						vals.back().at(ast->getName()) = new ast::NumberAst(evalNumExpr(valAst));
+					}
+					else if(CanCastInStr(valAst))
+					{
+						vals.back().at(ast->getName()) = new ast::StringAst(evalStrExpr(valAst));
+					}
+					else
+					{
+						assert(0 && "unknown type");
+					}
+				}
 			}
-			StringVals[ast->getName()] = r2.first;
 		}
 		else
 		{
-			assert(0 && "illegal argument");
+			if(valAst->getID() == ast::IdentID)
+			{
+				if(TypeOfIdentAst(valAst) == ast::NumberID)
+				{
+					vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
+				}
+				else if(TypeOfIdentAst(valAst) == ast::StringID)
+				{
+					vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+				}
+				else
+				{
+					assert(0 && "unknown type");
+				}
+			}
+			else
+			{
+				if(CanCastInNum(valAst))
+				{
+					vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
+				}
+				else if(CanCastInStr(valAst))
+				{
+					vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+				}
+				else
+				{
+					assert(0 && "unknown type");
+				}
+			}
 		}
 	}
 
+	// ================
+	//        if
+	// ================
+
 	void evalIfStmtAst(ast::IfStmtAst* ast)
 	{
-		if(ifExit)return;
-		const auto[CondEval, flg] = evalExpr(ast->Cond);
-		assert(flg);
+		if(ExitFlag)return;
+		assert(CanCastInNum(ast->Cond));
+
+		vals.emplace_back(std::unordered_map<std::string, ast::BaseAst*>{});
+		valsSize++;
+
+		const auto CondEval = evalNumExpr(ast->Cond);
 		if(CondEval)
 		{
 			for(auto& stmt : ast->getThenStmt())
@@ -269,89 +493,127 @@ struct AstEval {
 				}
 			}
 		}
+
+		vals.back().clear();
+		vals.pop_back();
+		valsSize--;
 	}
+
+	// ================
+	//      while
+	// ================
 
 	void evalWhileStmtAst(ast::WhileStmtAst* ast)
 	{
-		if(ifExit)return;
-		ifInWhile++;
+		if(ExitFlag)return;
+		assert(CanCastInNum(ast->getCond()));
+
+		vals.emplace_back(std::unordered_map<std::string, ast::BaseAst*>{});
+		valsSize++;
+
 		while(true)
 		{
-			const auto[CondEval, flg] = evalExpr(ast->getCond());
-			if(not (flg and CondEval))break;
+			const auto CondEval = evalNumExpr(ast->getCond());
+			if(not CondEval)break;
 			for(auto& stmt : ast->getLoopStmt())
 			{
 				evalStmts(stmt);
-				if(ifBreak)
+				if(BreakFlag)
 				{
-					ifBreak = false;
+					BreakFlag = false;
 					return;
 				}
-				if(ifContinue)
+				if(ContinueFlag)
 				{
-					ifContinue = false;
+					ContinueFlag = false;
 					break;
 				}
-				if(ifExit)return;
+				if(ExitFlag)return;
 			}
 		}
-		ifInWhile--;
+
+		vals.back().clear();
+		vals.pop_back();
+		valsSize--;
 	}
+
+	// ================
+	//       for
+	// ================
 
 	void evalForStmtAst(ast::ForStmtAst* ast)
 	{
-		if(ifExit)return;
+		if(ExitFlag)return;
 		const auto& name = ast->getIdent();
-		bool existVal = i64Vals.find(name) != std::end(i64Vals);
-		std::int_fast64_t tmp{};
-		if(existVal) { tmp = i64Vals[name]; }
-		const auto[fromEval, fromFlg] = evalExpr(ast->getRange()->getFrom());
-		const auto[toEval, toFlg] = evalExpr(ast->getRange()->getTo());
-		assert(fromFlg and toFlg);
+		assert(builtin.find(name) == std::end(builtin));
+		assert(CanCastInNum(ast->getRange()->getFrom()) and CanCastInNum(ast->getRange()->getTo()));
 
-		for(i64Vals[name] = fromEval; \
-			i64Vals[name] < toEval; i64Vals[name]++)
+		vals.emplace_back(std::unordered_map<std::string, ast::BaseAst*>{});
+		valsSize++;
+		const auto fromEval = evalNumExpr(ast->getRange()->getFrom());
+		const auto toEval = evalNumExpr(ast->getRange()->getTo());
+
+		vals.back()[name] = new ast::NumberAst(fromEval);
+		for(; dynamic_cast<ast::NumberAst*>(vals.back().at(name))->getVal() < toEval;)
 		{
 			for(auto& stmt : ast->getStmts())
 			{
 				evalStmts(stmt);
-				if(ifBreak)
+				if(BreakFlag)
 				{
-					ifBreak = false;
+					BreakFlag = false;
 					return;
 				}
-				if(ifContinue)
+				if(ContinueFlag)
 				{
-					ifContinue = false;
+					ContinueFlag = false;
 					break;
 				}
-				if(ifExit)return;
+				if(ExitFlag)return;
 			}
+
+			dynamic_cast<ast::NumberAst*>(vals.back().at(name))->getVal()++;
 		}
 
-		if(existVal) { i64Vals[name] = tmp; }
-		else { i64Vals.erase(name); }
+		vals.back().clear();
+		vals.pop_back();
+		valsSize--;
 	}
 
-	std::pair<std::string, bool> evalStrExpr(ast::BaseAst* ast)
+	// ================
+	//      string
+	// ================
+
+	std::string evalStrExpr(ast::BaseAst* ast)
 	{
 		if(ast->getID() == ast::StringID)
 		{
-			return std::make_pair(evalStringAst(static_cast<ast::StringAst*>(ast)), true);
+			return evalStringAst(dynamic_cast<ast::StringAst*>(ast));
 		}
 		else if(ast->getID() == ast::IdentID)
 		{
-			const auto& name = static_cast<ast::IdentAst*>(ast)->getIdent();
-			if(not ifExistini64Vals(name))
+			const auto& name = dynamic_cast<ast::IdentAst*>(ast)->getIdent();
+
+			for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
 			{
-				return std::make_pair(StringVals.at(name), true);
+				if(vals[i].find(name) != std::end(vals[i]))
+				{
+					if(CanCastInStr(vals[i].at(name)))
+					{
+						return evalStrExpr(vals[i].at(name));
+					}
+					else
+					{
+						assert(0);
+					}
+				}
 			}
 		}
 		else // otherwise
 		{
-			return std::make_pair("!match", false);
+			return std::string("!match");
 		}
-		return std::make_pair("!match", false);
+		return std::string("!match");
 	}
 
 	std::string evalStringAst(ast::StringAst* ast)
@@ -359,33 +621,48 @@ struct AstEval {
 		return ast->getVal();
 	}
 
-	std::pair<std::int_fast64_t, bool> evalExpr(ast::BaseAst* ast)
+	// ================
+	//      Number
+	// ================
+
+	std::int_fast64_t evalNumExpr(ast::BaseAst* ast)
 	{
 		if(ast->getID() == ast::NumberID)
 		{
-			return std::make_pair(evalNumberAst(static_cast<ast::NumberAst*>(ast)), true);
+			return evalNumberAst(dynamic_cast<ast::NumberAst*>(ast));
 		}
 		else if(ast->getID() == ast::IdentID)
 		{
-			const auto& name = static_cast<ast::IdentAst*>(ast)->getIdent();
-			if(not ifExistinStringVals(name))
+			const auto& name = dynamic_cast<ast::IdentAst*>(ast)->getIdent();
+
+			for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
 			{
-				return std::make_pair(i64Vals.at(name), true);
+				if(vals[i].find(name) != std::end(vals[i]))
+				{
+					if(CanCastInNum(vals[i].at(name)))
+					{
+						return evalNumExpr(vals[i].at(name));
+					}
+					else
+					{
+						assert(0);
+					}
+				}
 			}
 		}
 		else if(ast->getID() == ast::BinaryExpID)
 		{
-			return std::make_pair(evalBinaryExpAst(static_cast<ast::BinaryExpAst*>(ast)), true);
+			return evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast));
 		}
 		else if(ast->getID() == ast::MonoExpID)
 		{
-			return std::make_pair(evalMonoExpAst(static_cast<ast::MonoExpAst*>(ast)), true);
+			return evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast));
 		}
 		else // otherwize
 		{
-			return std::make_pair(-1, false);
+			return -1;
 		}
-		return std::make_pair(-1, false);
+		return -1;
 	}
 
 	std::int_fast64_t evalNumberAst(ast::NumberAst* ast)
@@ -404,16 +681,16 @@ struct AstEval {
 			 isLhsIdent = ast->getLhs()->getID() == ast::IdentID,
 			 isRhsIdent = ast->getRhs()->getID() == ast::IdentID;
 		const auto LhsEval =
-			isLhsNumber ? evalNumberAst(static_cast<ast::NumberAst*>(ast->getLhs())) : \
-			isLhsMonoExp ? evalMonoExpAst(static_cast<ast::MonoExpAst*>(ast->getLhs())) : \
-			isLhsBinExp ? evalBinaryExpAst(static_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
-			isLhsIdent ? i64Vals.at(static_cast<ast::IdentAst*>(ast->getLhs())->getIdent()) : \
+			isLhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getLhs())) : \
+			isLhsMonoExp ? evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getLhs())) : \
+			isLhsBinExp ? evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
+			isLhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getLhs())) : \
 			-1; // dummy
 		const auto RhsEval =
-			isRhsNumber ? evalNumberAst(static_cast<ast::NumberAst*>(ast->getRhs())) : \
-			isRhsMonoExp ? evalMonoExpAst(static_cast<ast::MonoExpAst*>(ast->getRhs())) : \
-			isRhsBinExp ? evalBinaryExpAst(static_cast<ast::BinaryExpAst*>(ast->getRhs())) : \
-			isRhsIdent ? i64Vals.at(static_cast<ast::IdentAst*>(ast->getRhs())->getIdent()) : \
+			isRhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getRhs())) : \
+			isRhsMonoExp ? evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getRhs())) : \
+			isRhsBinExp ? evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getRhs())) : \
+			isRhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getRhs())) : \
 			-1; // dummy
 		if(ast->getOp() == "+") { return LhsEval + RhsEval; }
 		else if(ast->getOp() == "-") { return LhsEval - RhsEval; }
@@ -443,10 +720,10 @@ struct AstEval {
 			 isLhsIdent = ast->getLhs()->getID() == ast::IdentID;
 			 
 		const auto LhsEval =
-			isLhsNumber ? evalNumberAst(static_cast<ast::NumberAst*>(ast->getLhs())) : \
-			isLhsMonoExp ? evalMonoExpAst(static_cast<ast::MonoExpAst*>(ast->getLhs())) : \
-			isLhsBinExp ? evalBinaryExpAst(static_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
-			isLhsIdent ? i64Vals.at(static_cast<ast::IdentAst*>(ast->getLhs())->getIdent()) : \
+			isLhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getLhs())) : \
+			isLhsMonoExp ? evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getLhs())) : \
+			isLhsBinExp ? evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
+			isLhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getLhs())) : \
 			-1; // dummy
 		if(ast->getOp() == "!") { return static_cast<std::int_fast64_t>(! LhsEval); }
 		else // otherwize

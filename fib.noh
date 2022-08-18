@@ -1,11 +1,11 @@
-fn main {
+fn main() {
 	print "fibonacchi seq:";
-	prev = 0;
-	cur = 1;
+	var prev = 0;
+	var cur = 1;
 	for i in 0..10 {
 		print cur;
-		tmp = prev;
-		prev = cur;
-		cur = tmp + cur;
+		var tmp = prev;
+		var prev = cur;
+		var cur = tmp + cur;
 	}
 }
