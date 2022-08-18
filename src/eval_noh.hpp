@@ -19,7 +19,7 @@ struct AstEval {
 	bool ReturnFlag = false;
 	bool BreakFlag = false;
 	bool ContinueFlag = false;
-	std::uint32_t valsSize, FuncRecSize, curLower;
+	std::int_fast32_t valsSize, FuncRecSize, curLower;
 
 	std::unordered_set<std::string> builtin = {
 		"break",
@@ -137,7 +137,8 @@ struct AstEval {
 	ast::AstID TypeOfIdentAst(ast::IdentAst* ast)
 	{
 		const auto& name = ast->getIdent();
-		for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+		assert(valsSize >= 1);
+		for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
 		{
 			if(vals[i].find(name) != std::end(vals[i]))
 			{
@@ -155,7 +156,8 @@ struct AstEval {
 			return ast::NoneID;
 		}
 		const auto& name = dynamic_cast<ast::IdentAst*>(ast)->getIdent();
-		for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+		assert(valsSize >= 1);
+		for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
 		{
 			if(vals[i].find(name) != std::end(vals[i]))
 			{
@@ -333,20 +335,25 @@ struct AstEval {
 			for(auto& arg : ast->Args)
 			{
 				const auto& ident = dynamic_cast<ast::IdentAst*>(arg)->getIdent();
-	
-				for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+
+				bool flg = true;
+				assert(valsSize >= 1);
+				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
 				{
-					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					if(vals[i].find(ident) != std::end(vals[i]))
 					{
-						if(CanCastInNum(vals[i].at(ast->getName())))
+						if(CanCastInNum(vals[i].at(ident)))
 						{
 							std::int_fast64_t tmp;
 							std::cin >> tmp;
-							vals[i].at(ast->getName()) = new ast::NumberAst(tmp);
+							dynamic_cast<ast::NumberAst*>(vals[i].at(ident))->getVal() = tmp;
+							flg = false;
+							break;
 						}
 						else assert(0 && "different type");
 					}
 				}
+				if(flg) { assert(0 && "unknown ident"); }
 			}
 		}
 		else if(builtinName == "scans")
@@ -356,19 +363,24 @@ struct AstEval {
 			{
 				const auto& ident = dynamic_cast<ast::IdentAst*>(arg)->getIdent();
 	
-				for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+				assert(valsSize >= 1);
+				bool flg = true;
+				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
 				{
-					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					if(vals[i].find(ident) != std::end(vals[i]))
 					{
-						if(CanCastInStr(vals[i].at(ast->getName())))
+						if(CanCastInStr(vals[i].at(ident)))
 						{
 							std::string tmp;
 							std::cin >> tmp;
-							vals[i].at(ast->getName()) = new ast::StringAst(tmp);
+							dynamic_cast<ast::StringAst*>(vals[i].at(ident))->getVal() = tmp;
+							flg = false;
+							break;
 						}
 						else assert(0 && "different type");
 					}
 				}
+				if(flg) { assert(0 && "unknown ident"); }
 			}
 		}
 	}
@@ -384,81 +396,112 @@ struct AstEval {
 		const auto& valAst = ast->getVal();
 		assert(not vals.empty());
 
-		if(vals.back().find(ast->getName()) != std::end(vals.back()))
+		if(valAst->getID() == ast::IdentID)
 		{
-			if(CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(valAst) and \
-				CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(TypeOfIdentAst(valAst)))
+			if(TypeOfIdentAst(valAst) == ast::NumberID)
 			{
-				std::cerr << CastAstIdx(vals.back().at(ast->getName())) << std::endl;
-				std::cerr << CastAstIdx(valAst) << std::endl;
-				std::cerr << valAst->getID() << std::endl;
-				assert(0 && "different type");
+				bool flg = true;
+				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
+				{
+					/*
+					if(CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(valAst) and \
+						CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(TypeOfIdentAst(valAst)))
+					{
+						std::cerr << CastAstIdx(vals.back().at(ast->getName())) << std::endl;
+						std::cerr << CastAstIdx(valAst) << std::endl;
+						std::cerr << valAst->getID() << std::endl;
+						assert(0 && "different type");
+					}
+						*/
+					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					{
+						if(CanCastInNum(vals[i].at(ast->getName())))
+						{
+							dynamic_cast<ast::NumberAst*>(vals[i].at(ast->getName()))->getVal() = evalNumExpr(valAst);
+							flg = false;
+							break;
+						}
+						else assert(0 && "different type");
+					}
+				}
+				if(flg)
+				{
+					vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
+				}
+			}
+			else if(TypeOfIdentAst(valAst) == ast::StringID)
+			{
+				bool flg = true;
+				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
+				{
+					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					{
+						if(CanCastInStr(vals[i].at(ast->getName())))
+						{
+							dynamic_cast<ast::StringAst*>(vals[i].at(ast->getName()))->getVal() = evalStrExpr(valAst);
+							flg = false;
+							break;
+						}
+						else assert(0 && "different type");
+					}
+				}
+				if(flg)
+				{
+					vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+				}
 			}
 			else
 			{
-				if(valAst->getID() == ast::IdentID)
-				{
-					if(TypeOfIdentAst(valAst) == ast::NumberID)
-					{
-						vals.back().at(ast->getName()) = new ast::NumberAst(evalNumExpr(valAst));
-					}
-					else if(TypeOfIdentAst(valAst) == ast::StringID)
-					{
-						vals.back().at(ast->getName()) = new ast::StringAst(evalStrExpr(valAst));
-					}
-					else
-					{
-						assert(0 && "unknown type");
-					}
-				}
-				else
-				{
-					if(CanCastInNum(valAst))
-					{
-						vals.back().at(ast->getName()) = new ast::NumberAst(evalNumExpr(valAst));
-					}
-					else if(CanCastInStr(valAst))
-					{
-						vals.back().at(ast->getName()) = new ast::StringAst(evalStrExpr(valAst));
-					}
-					else
-					{
-						assert(0 && "unknown type");
-					}
-				}
+				assert(0 && "unknown type");
 			}
 		}
 		else
 		{
-			if(valAst->getID() == ast::IdentID)
+			if(CanCastInNum(valAst))
 			{
-				if(TypeOfIdentAst(valAst) == ast::NumberID)
+				bool flg = true;
+				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
+				{
+					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					{
+						if(CanCastInNum(vals[i].at(ast->getName())))
+						{
+							dynamic_cast<ast::NumberAst*>(vals[i].at(ast->getName()))->getVal() = evalNumExpr(valAst);
+							flg = false;
+							break;
+						}
+						else assert(0 && "different type");
+					}
+				}
+				if(flg)
 				{
 					vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
 				}
-				else if(TypeOfIdentAst(valAst) == ast::StringID)
+			}
+			else if(CanCastInStr(valAst))
+			{
+				bool flg = true;
+				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
+				{
+					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					{
+						if(CanCastInStr(vals[i].at(ast->getName())))
+						{
+							dynamic_cast<ast::StringAst*>(vals[i].at(ast->getName()))->getVal() = evalStrExpr(valAst);
+							flg = false;
+							break;
+						}
+						else assert(0 && "different type");
+					}
+				}
+				if(flg)
 				{
 					vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
-				}
-				else
-				{
-					assert(0 && "unknown type");
 				}
 			}
 			else
 			{
-				if(CanCastInNum(valAst))
-				{
-					vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
-				}
-				else if(CanCastInStr(valAst))
-				{
-					vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
-				}
-				else
-				{
-					assert(0 && "unknown type");
-				}
+				assert(0 && "unknown type");
 			}
 		}
 	}
@@ -594,7 +637,8 @@ struct AstEval {
 		{
 			const auto& name = dynamic_cast<ast::IdentAst*>(ast)->getIdent();
 
-			for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+			assert(valsSize >= 1);
+			for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
 			{
 				if(vals[i].find(name) != std::end(vals[i]))
 				{
@@ -608,6 +652,7 @@ struct AstEval {
 					}
 				}
 			}
+			assert(0 && "unknown ident");
 		}
 		else // otherwise
 		{
@@ -635,7 +680,8 @@ struct AstEval {
 		{
 			const auto& name = dynamic_cast<ast::IdentAst*>(ast)->getIdent();
 
-			for(int i = static_cast<int>(valsSize) - 1; i >= curLower; i--)
+			assert(valsSize >= 1);
+			for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
 			{
 				if(vals[i].find(name) != std::end(vals[i]))
 				{
@@ -649,6 +695,8 @@ struct AstEval {
 					}
 				}
 			}
+
+			assert(0 && "unknown ident");
 		}
 		else if(ast->getID() == ast::BinaryExpID)
 		{
