@@ -1,3 +1,3 @@
 namespace Noh {
-constexpr bool isDebug = true;
+constexpr bool isDebug = false;
 } // namespace Noh
