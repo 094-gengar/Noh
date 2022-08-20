@@ -333,7 +333,7 @@ struct AstEval {
 				}
 			}
 		}
-		else if(builtinName == "scani")
+		else if(builtinName == "scanNum")
 		{
 			if(ExitFlag)return;
 			for(auto& arg : ast->Args)
@@ -360,7 +360,7 @@ struct AstEval {
 				if(flg) { assert(0 && "unknown ident"); }
 			}
 		}
-		else if(builtinName == "scans")
+		else if(builtinName == "scanStr")
 		{
 			if(ExitFlag)return;
 			for(auto& arg : ast->Args)
@@ -639,7 +639,8 @@ struct AstEval {
 		if(ExitFlag)return;
 		const auto& name = ast->getIdent();
 		assert(builtin.find(name) == std::end(builtin));
-		assert(CanCastInNum(ast->getRange()->getFrom()) and CanCastInNum(ast->getRange()->getTo()));
+		assert(CanCastInNum(ast->getRange()->getFrom()) or CanCastInNum(TypeOfIdentAst(ast->getRange()->getFrom())));
+		assert(CanCastInNum(ast->getRange()->getTo()) or CanCastInNum(TypeOfIdentAst(ast->getRange()->getTo())));
 
 		vals.emplace_back(std::unordered_map<std::string, ast::BaseAst*>{});
 		valsSize++;

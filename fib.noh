@@ -1,9 +1,9 @@
 fn main() {
-	print "fibonacchi seq:";
+	print("fibonacchi seq:");
 	var prev = 0;
 	var cur = 1;
 	for i in 0..10 {
-		print cur;
+		print(cur);
 		var tmp = prev;
 		prev = cur;
 		cur = tmp + cur;

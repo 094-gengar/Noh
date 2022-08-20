@@ -64,13 +64,15 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			| ("continue" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("continue")])
 			| ("exit" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("exit")])
 			| ("return" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("return")])
-			| ("print" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("print")]
+			| ("print" >> qi::char_('(') >> qi::eps[_val = ph::new_<ast::BuiltinAst>("print")]
 				>> (Expr[ph::push_back(ph::at_c<1>(*_val), _1)]
 					| StringExpr[ph::push_back(ph::at_c<1>(*_val), _1)])
 				>> *(',' >> (Expr[ph::push_back(ph::at_c<1>(*_val), _1)]
-					| StringExpr[ph::push_back(ph::at_c<1>(*_val), _1)])))
-			| ("scani" >> Ident[_val = ph::new_<ast::BuiltinAst>("scani"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])
-			| ("scans" >> Ident[_val = ph::new_<ast::BuiltinAst>("scans"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])) >> ';';
+					| StringExpr[ph::push_back(ph::at_c<1>(*_val), _1)]))
+				>> qi::char_(')'))
+			| ("scanNum" >> qi::char_('(') >> Ident[_val = ph::new_<ast::BuiltinAst>("scanNum"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))] >> qi::char_(')'))
+			| ("scanStr" >> qi::char_('(') >> Ident[_val = ph::new_<ast::BuiltinAst>("scanStr"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))] >> qi::char_(')')))
+				>> ';';
 
 		Assign = "var" >> Ident[_val = ph::new_<ast::AssignAst>(_1)] >> '='
 			>> ((Expr | StringExpr)[ph::at_c<1>(*_val) = _1] | Ident[ph::at_c<1>(*_val) = ph::new_<ast::IdentAst>(_1)]) >> ';';
