@@ -24,6 +24,7 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 	qi::rule<Iterator, ast::BaseAst*(), Skipper> Stmt;
 	qi::rule<Iterator, ast::BuiltinAst*(), Skipper> Builtin;
 	qi::rule<Iterator, ast::AssignAst*(), Skipper> Assign;
+	qi::rule<Iterator, ast::ReAssignAst*(), Skipper> ReAssign;
 	qi::rule<Iterator, ast::IfStmtAst*(), Skipper> IfStmt;
 	qi::rule<Iterator, ast::WhileStmtAst*(), Skipper> WhileStmt;
 	qi::rule<Iterator, ast::RangeAst*(), Skipper> Range;
@@ -56,10 +57,7 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			>> '(' >> -((Expr[ph::push_back(ph::at_c<1>(*_val), _1)] | StringExpr[ph::push_back(ph::at_c<1>(*_val), _1)])
 			>> *(',' >> (Expr[ph::push_back(ph::at_c<1>(*_val), _1)] | StringExpr[ph::push_back(ph::at_c<1>(*_val), _1)]))) >> ')' >> ';';
 
-		Stmt = Builtin | IfStmt | WhileStmt | ForStmt | Assign | Call;
-
-		Assign = "var" >> Ident[_val = ph::new_<ast::AssignAst>(_1)] >> '='
-			>> ((Expr | StringExpr)[ph::at_c<1>(*_val) = _1] | Ident[ph::at_c<1>(*_val) = ph::new_<ast::IdentAst>(_1)]) >> ';';
+		Stmt = Builtin | IfStmt | WhileStmt | ForStmt | Assign | ReAssign | Call;
 
 		Builtin =
 			 (("break" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("break")])
@@ -74,6 +72,12 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			| ("scani" >> Ident[_val = ph::new_<ast::BuiltinAst>("scani"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])
 			| ("scans" >> Ident[_val = ph::new_<ast::BuiltinAst>("scans"), ph::push_back(ph::at_c<1>(*_val), ph::new_<ast::IdentAst>(_1))])) >> ';';
 
+		Assign = "var" >> Ident[_val = ph::new_<ast::AssignAst>(_1)] >> '='
+			>> ((Expr | StringExpr)[ph::at_c<1>(*_val) = _1] | Ident[ph::at_c<1>(*_val) = ph::new_<ast::IdentAst>(_1)]) >> ';';
+		
+		ReAssign = Ident[_val = ph::new_<ast::ReAssignAst>(_1)] >> '='
+			>> ((Expr | StringExpr)[ph::at_c<1>(*_val) = _1] | Ident[ph::at_c<1>(*_val) = ph::new_<ast::IdentAst>(_1)]) >> ';';
+
 		IfStmt = "if" >> Expr[_val = ph::new_<ast::IfStmtAst>(), ph::at_c<0>(*_val) = _1]
 			>> '{' >> *Stmt[ph::push_back(ph::at_c<1>(*_val), _1)]
 			>> -(qi::char_('}') >> "else" >> '{' >> *Stmt[ph::push_back(ph::at_c<2>(*_val), _1)]) >> '}';
@@ -87,21 +91,24 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 		Factor = qi::int_[_val = ph::new_<ast::NumberAst>(_1)]
 			| Ident[_val = ph::new_<ast::IdentAst>(_1)]
 			| '(' >> Expr[_val = _1] >> ')';
-		E1 = Factor[_val = _1] >>
-			*(('*' >> Factor[_val = ph::new_<ast::BinaryExpAst>("*", _val, _1)])
-			| ('/' >> Factor[_val = ph::new_<ast::BinaryExpAst>("/", _val, _1)])
-			| ('%' >> Factor[_val = ph::new_<ast::BinaryExpAst>("%", _val, _1)]));
+		E1 = Factor[_val = _1]
+			| ('!' >> Factor[_val = ph::new_<ast::MonoExpAst>("!", _1)])
+			| ('-' >> Factor[_val = ph::new_<ast::MonoExpAst>("-", _1)])
+			| ('~' >> Factor[_val = ph::new_<ast::MonoExpAst>("~", _1)]);
 		E2 = E1[_val = _1] >>
-			*(('+' >> E1[_val = ph::new_<ast::BinaryExpAst>("+", _val, _1)])
-			| ('-' >> E1[_val = ph::new_<ast::BinaryExpAst>("-", _val, _1)]));
+			*(('*' >> E1[_val = ph::new_<ast::BinaryExpAst>("*", _val, _1)])
+			| ('/' >> E1[_val = ph::new_<ast::BinaryExpAst>("/", _val, _1)])
+			| ('%' >> E1[_val = ph::new_<ast::BinaryExpAst>("%", _val, _1)]));
 		E3 = E2[_val = _1] >>
-			*(("==" >> E2[_val = ph::new_<ast::BinaryExpAst>("==", _val, _1)])
-			| ("!=" >> E2[_val = ph::new_<ast::BinaryExpAst>("!=", _val, _1)])
-			| ('<' >> E2[_val = ph::new_<ast::BinaryExpAst>("<", _val, _1)])
-			| ('>' >> E2[_val = ph::new_<ast::BinaryExpAst>(">", _val, _1)])
-			| ("<=" >> E2[_val = ph::new_<ast::BinaryExpAst>("<=", _val, _1)])
-			| (">=" >> E2[_val = ph::new_<ast::BinaryExpAst>(">=", _val, _1)]));
-		E4 = E3[_val = _1] | ('!' >> E3[_val = ph::new_<ast::MonoExpAst>("!", _1)]);
+			*(('+' >> E2[_val = ph::new_<ast::BinaryExpAst>("+", _val, _1)])
+			| ('-' >> E2[_val = ph::new_<ast::BinaryExpAst>("-", _val, _1)]));
+		E4 = E3[_val = _1] >>
+			*(("==" >> E3[_val = ph::new_<ast::BinaryExpAst>("==", _val, _1)])
+			| ("!=" >> E3[_val = ph::new_<ast::BinaryExpAst>("!=", _val, _1)])
+			| ('<' >> E3[_val = ph::new_<ast::BinaryExpAst>("<", _val, _1)])
+			| ('>' >> E3[_val = ph::new_<ast::BinaryExpAst>(">", _val, _1)])
+			| ("<=" >> E3[_val = ph::new_<ast::BinaryExpAst>("<=", _val, _1)])
+			| (">=" >> E3[_val = ph::new_<ast::BinaryExpAst>(">=", _val, _1)]));
 		E5 = E4[_val = _1] >>
 			*(("&&" >> E4[_val = ph::new_<ast::BinaryExpAst>("&&", _val, _1)])
 			| ("||" >> E4[_val = ph::new_<ast::BinaryExpAst>("||", _val, _1)]));

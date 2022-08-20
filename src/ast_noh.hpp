@@ -21,6 +21,7 @@ enum AstID {
 	BinaryExpID,
 	BuiltinID,
 	AssignID,
+	ReAssignID,
 	StmtID,
 	IfStmtID,
 	WhileStmtID,
@@ -196,6 +197,21 @@ public:
 	BaseAst* getVal() { return this->Val; }
 };
 
+class ReAssignAst : public BaseAst {
+public:
+	std::string Name;
+	BaseAst* Val;
+
+	ReAssignAst(const std::string& name) : BaseAst(AstID::ReAssignID), Name(name)
+	{
+		if constexpr (isDebug) { std::cerr << "ReAssignAst(" << this << ") " << name << std::endl; }
+	}
+	~ReAssignAst() { delete this->Val; }
+	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ReAssignID; }
+	std::string& getName(void) { return this->Name; }
+	BaseAst* getVal() { return this->Val; }	
+};
+
 class IfStmtAst : public BaseAst {
 public:
 	BaseAst* Cond;
@@ -303,6 +319,11 @@ BOOST_FUSION_ADAPT_STRUCT(
 )
 BOOST_FUSION_ADAPT_STRUCT(
 	Noh::ast::AssignAst,
+	(std::string, Name)
+	(Noh::ast::BaseAst*, Val)
+)
+BOOST_FUSION_ADAPT_STRUCT(
+	Noh::ast::ReAssignAst,
 	(std::string, Name)
 	(Noh::ast::BaseAst*, Val)
 )

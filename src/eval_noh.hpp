@@ -259,6 +259,10 @@ struct AstEval {
 		{
 			evalAssignAst(dynamic_cast<ast::AssignAst*>(ast));
 		}
+		else if(ast->getID() == ast::ReAssignID)
+		{
+			evalReAssignAst(dynamic_cast<ast::ReAssignAst*>(ast));
+		}
 		else if(ast->getID() == ast::IfStmtID)
 		{
 			evalIfStmtAst(dynamic_cast<ast::IfStmtAst*>(ast));
@@ -386,7 +390,7 @@ struct AstEval {
 	}
 
 	// ================
-	//      assign
+	//    (re)assign
 	// ================
 
 	void evalAssignAst(ast::AssignAst* ast)
@@ -400,19 +404,64 @@ struct AstEval {
 		{
 			if(TypeOfIdentAst(valAst) == ast::NumberID)
 			{
+				if(vals.back().find(ast->getName()) != std::end(vals.back()))
+				{
+					assert(0 && "redefinition of variable is not allowed");
+				}
+				vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
+			}
+			else if(TypeOfIdentAst(valAst) == ast::StringID)
+			{
+				if(vals.back().find(ast->getName()) != std::end(vals.back()))
+				{
+					assert(0 && "redefinition of variable is not allowed");
+				}
+				vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+			}
+			else
+			{
+				assert(0 && "unknown type");
+			}
+		}
+		else
+		{
+			if(CanCastInNum(valAst))
+			{
+				if(vals.back().find(ast->getName()) != std::end(vals.back()))
+				{
+					assert(0 && "redefinition of variable is not allowed");
+				}
+				vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
+			}
+			else if(CanCastInStr(valAst))
+			{
+				if(vals.back().find(ast->getName()) != std::end(vals.back()))
+				{
+					assert(0 && "redefinition of variable is not allowed");
+				}
+				vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+			}
+			else
+			{
+				assert(0 && "unknown type");
+			}
+		}
+	}
+
+	void evalReAssignAst(ast::ReAssignAst* ast)
+	{
+		if(ExitFlag)return;
+		assert(builtin.find(ast->getName()) == std::end(builtin));
+		const auto& valAst = ast->getVal();
+		assert(not vals.empty());
+
+		if(valAst->getID() == ast::IdentID)
+		{
+			if(TypeOfIdentAst(valAst) == ast::NumberID)
+			{
 				bool flg = true;
 				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
 				{
-					/*
-					if(CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(valAst) and \
-						CastAstIdx(vals.back().at(ast->getName())) != CastAstIdx(TypeOfIdentAst(valAst)))
-					{
-						std::cerr << CastAstIdx(vals.back().at(ast->getName())) << std::endl;
-						std::cerr << CastAstIdx(valAst) << std::endl;
-						std::cerr << valAst->getID() << std::endl;
-						assert(0 && "different type");
-					}
-						*/
 					if(vals[i].find(ast->getName()) != std::end(vals[i]))
 					{
 						if(CanCastInNum(vals[i].at(ast->getName())))
@@ -426,7 +475,7 @@ struct AstEval {
 				}
 				if(flg)
 				{
-					vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
+					assert(0 && "unknown ident");
 				}
 			}
 			else if(TypeOfIdentAst(valAst) == ast::StringID)
@@ -447,7 +496,7 @@ struct AstEval {
 				}
 				if(flg)
 				{
-					vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+					assert(0 && "unknown ident");
 				}
 			}
 			else
@@ -475,7 +524,7 @@ struct AstEval {
 				}
 				if(flg)
 				{
-					vals.back()[ast->getName()] = new ast::NumberAst(evalNumExpr(valAst));
+					assert(0 && "unknown ident");
 				}
 			}
 			else if(CanCastInStr(valAst))
@@ -496,7 +545,7 @@ struct AstEval {
 				}
 				if(flg)
 				{
-					vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+					assert(0 && "unknown ident");
 				}
 			}
 			else
@@ -573,6 +622,7 @@ struct AstEval {
 				}
 				if(ExitFlag)return;
 			}
+			vals.back().clear();
 		}
 
 		vals.back().clear();
@@ -596,8 +646,10 @@ struct AstEval {
 		const auto fromEval = evalNumExpr(ast->getRange()->getFrom());
 		const auto toEval = evalNumExpr(ast->getRange()->getTo());
 
+		auto tmpItr = fromEval;
 		vals.back()[name] = new ast::NumberAst(fromEval);
-		for(; dynamic_cast<ast::NumberAst*>(vals.back().at(name))->getVal() < toEval;)
+
+		for(; tmpItr < toEval;)
 		{
 			for(auto& stmt : ast->getStmts())
 			{
@@ -615,7 +667,8 @@ struct AstEval {
 				if(ExitFlag)return;
 			}
 
-			dynamic_cast<ast::NumberAst*>(vals.back().at(name))->getVal()++;
+			vals.back().clear();
+			vals.back()[name] = new ast::NumberAst(++tmpItr);
 		}
 
 		vals.back().clear();
@@ -774,6 +827,8 @@ struct AstEval {
 			isLhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getLhs())) : \
 			-1; // dummy
 		if(ast->getOp() == "!") { return static_cast<std::int_fast64_t>(! LhsEval); }
+		else if(ast->getOp() == "-") { return -LhsEval; }
+		else if(ast->getOp() == "~") { return ~LhsEval; }
 		else // otherwize
 		{
 			assert(0 && "no match");
