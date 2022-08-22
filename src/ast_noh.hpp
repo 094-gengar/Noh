@@ -27,6 +27,7 @@ enum AstID {
 	WhileStmtID,
 	RangeID,
 	ForStmtID,
+	TupleID,
 
 	NoneID,
 };
@@ -51,7 +52,7 @@ public:
 	}
 	~FuncAst()
 	{
-		for(auto ptr : this->Inst) { delete ptr; }
+		for(auto& ptr : this->Inst) { delete ptr; }
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::FuncID; }
 	std::string& getName() { return this->Name; }
@@ -81,7 +82,7 @@ public:
 	{
 		if constexpr (isDebug) { std::cerr << "ModuleAst(" << this << ")" << std::endl; }
 	}
-	~ModuleAst() { for(auto p : this->Funcs) { delete p; } }
+	~ModuleAst() { for(auto& p : this->Funcs) { delete p; } }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ModuleID; }
 	std::vector<FuncAst*>& getFuncs() { return this->Funcs; }
 };
@@ -160,6 +161,11 @@ public:
 	{
 		if constexpr (isDebug) { std::cerr << "BinaryExpAst(" << this << ") " << lhs << ' ' << op << ' ' << rhs << std::endl; }
 	}
+	BinaryExpAst(const std::string& op)
+		: BaseAst(AstID::BinaryExpID)
+	{
+		if constexpr (isDebug) { std::cerr << "BinaryExpAst(" << this << ")" << std::endl; }
+	}
 	~BinaryExpAst() { delete this->Lhs; delete this->Rhs; }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::BinaryExpID; }
 	std::string& getOp() { return this->Op; }
@@ -176,7 +182,7 @@ public:
 	{
 		if constexpr (isDebug) { std::cerr << "BuiltinAst(" << this << ") " << name << std::endl; }
 	}
-	~BuiltinAst() { for(auto arg : this->Args) { delete arg; } }
+	~BuiltinAst() { for(auto& arg : this->Args) { delete arg; } }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::BuiltinID; }
 	std::string& getName() { return this->Name; }
 	std::vector<BaseAst*>& getArgs() { return this->Args; }
@@ -225,8 +231,8 @@ public:
 	~IfStmtAst()
 	{
 		delete this->Cond;
-		for(auto s : this->ThenStmt) { delete s; }
-		for(auto s : this->ElseStmt) { delete s; }
+		for(auto& s : this->ThenStmt) { delete s; }
+		for(auto& s : this->ElseStmt) { delete s; }
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::IfStmtID; }
 	BaseAst* getCond() { return this->Cond; }
@@ -246,7 +252,7 @@ public:
 	~WhileStmtAst()
 	{
 		delete this->Cond;
-		for(auto s : this->LoopStmt) { delete s; }
+		for(auto& s : this->LoopStmt) { delete s; }
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::WhileStmtID; }
 	BaseAst* getCond() { return this->Cond; }
@@ -285,12 +291,28 @@ public:
 	~ForStmtAst()
 	{
 		delete this->Range;
-		for(auto s : this->Stmts) { delete s; }
+		for(auto& s : this->Stmts) { delete s; }
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ForStmtID; }
 	std::string& getIdent() { return this->Ident; }
 	RangeAst* getRange() { return this->Range; }
 	std::vector<BaseAst*>& getStmts() { return this->Stmts; }
+};
+
+class TupleAst : public BaseAst {
+public:
+	std::vector<BaseAst*> Ary;
+
+	TupleAst(std::vector<BaseAst*> ary) : BaseAst(AstID::TupleID), Ary(ary)
+	{
+		if constexpr (isDebug) { std::cerr << "TupleAst(" << this << ")" << std::endl; }
+	}
+	~TupleAst()
+	{
+		for(auto& e : this->Ary) { delete e; }
+	}
+	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ForStmtID; }
+	std::vector<BaseAst*> getAry() { return this->Ary; }
 };
 
 } // namespace ast
@@ -348,4 +370,14 @@ BOOST_FUSION_ADAPT_STRUCT(
 	(std::string, Ident)
 	(Noh::ast::RangeAst*, Range)
 	(std::vector<Noh::ast::BaseAst*>, Stmts)
+)
+BOOST_FUSION_ADAPT_STRUCT(
+	Noh::ast::BinaryExpAst,
+	(std::string, Op)
+	(Noh::ast::BaseAst*, Lhs)
+	(Noh::ast::BaseAst*, Rhs)
+)
+BOOST_FUSION_ADAPT_STRUCT(
+	Noh::ast::TupleAst,
+	(std::vector<Noh::ast::BaseAst*>, Ary)
 )

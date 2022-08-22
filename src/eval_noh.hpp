@@ -108,6 +108,16 @@ struct AstEval {
 		return false;
 	}
 
+	bool CanCastInTpl(const ast::BaseAst* ast)
+	{
+		return ast->getID() == ast::TupleID;
+	}
+
+	bool CanCastInTpl(const ast::AstID& id)
+	{
+		return id == ast::TupleID;
+	}
+
 	std::int_fast8_t CastAstIdx(ast::BaseAst* ast)
 	{
 		if(CanCastInNum(ast))
@@ -117,6 +127,10 @@ struct AstEval {
 		else if(CanCastInStr(ast))
 		{
 			return 1;
+		}
+		else if(ast->getID() == ast::TupleID)
+		{
+			return 2;
 		}
 		return -1;	
 	}
@@ -130,6 +144,10 @@ struct AstEval {
 		else if(CanCastInStr(id))
 		{
 			return 1;
+		}
+		else if(id == ast::TupleID)
+		{
+			return 2;
 		}
 		return -1;	
 	}
@@ -305,11 +323,11 @@ struct AstEval {
 				{
 					if(TypeOfIdentAst(arg) == ast::NumberID)
 					{
-						std::cout << evalNumExpr(arg) << std::endl;;
+						std::cout << evalNumExpr(arg) << std::endl;
 					}
 					else if(TypeOfIdentAst(arg) == ast::StringID)
 					{
-						std::cout << evalStrExpr(arg) << std::endl;;
+						std::cout << evalStrExpr(arg) << std::endl;
 					}
 					else
 					{
@@ -320,11 +338,11 @@ struct AstEval {
 				{
 					if(CanCastInNum(arg))
 					{
-						std::cout << evalNumExpr(arg) << std::endl;;
+						std::cout << evalNumExpr(arg) << std::endl;
 					}
 					else if(CanCastInStr(arg))
 					{
-						std::cout << evalStrExpr(arg) << std::endl;;
+						std::cout << evalStrExpr(arg) << std::endl;
 					}
 					else
 					{
@@ -418,6 +436,14 @@ struct AstEval {
 				}
 				vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
 			}
+			else if(TypeOfIdentAst(valAst) == ast::TupleID)
+			{
+				if(vals.back().find(ast->getName()) != std::end(vals.back()))
+				{
+					assert(0 && "redefinition of variable is not allowed");
+				}
+				vals.back()[ast->getName()] = new ast::TupleAst(evalTplExpr(valAst));
+			}
 			else
 			{
 				assert(0 && "unknown type");
@@ -440,6 +466,14 @@ struct AstEval {
 					assert(0 && "redefinition of variable is not allowed");
 				}
 				vals.back()[ast->getName()] = new ast::StringAst(evalStrExpr(valAst));
+			}
+			else if(CanCastInTpl(valAst))
+			{
+				if(vals.back().find(ast->getName()) != std::end(vals.back()))
+				{
+					assert(0 && "redefinition of variable is not allowed");
+				}
+				vals.back()[ast->getName()] = new ast::TupleAst(evalTplExpr(valAst));
 			}
 			else
 			{
@@ -488,6 +522,27 @@ struct AstEval {
 						if(CanCastInStr(vals[i].at(ast->getName())))
 						{
 							dynamic_cast<ast::StringAst*>(vals[i].at(ast->getName()))->getVal() = evalStrExpr(valAst);
+							flg = false;
+							break;
+						}
+						else assert(0 && "different type");
+					}
+				}
+				if(flg)
+				{
+					assert(0 && "unknown ident");
+				}
+			}
+			else if(TypeOfIdentAst(valAst) == ast::TupleID)
+			{
+				bool flg = true;
+				for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
+				{
+					if(vals[i].find(ast->getName()) != std::end(vals[i]))
+					{
+						if(CanCastInStr(vals[i].at(ast->getName())))
+						{
+							dynamic_cast<ast::TupleAst*>(vals[i].at(ast->getName()))->getAry() = evalTplExpr(valAst);
 							flg = false;
 							break;
 						}
@@ -754,11 +809,11 @@ struct AstEval {
 		}
 		else if(ast->getID() == ast::BinaryExpID)
 		{
-			return evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast));
+			return evalNumBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast));
 		}
 		else if(ast->getID() == ast::MonoExpID)
 		{
-			return evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast));
+			return evalNumMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast));
 		}
 		else // otherwize
 		{
@@ -772,8 +827,26 @@ struct AstEval {
 		return ast->getVal();
 	}
 
-	std::int_fast64_t evalBinaryExpAst(ast::BinaryExpAst* ast)
+	std::int_fast64_t evalNumBinaryExpAst(ast::BinaryExpAst* ast)
 	{
+		if(CanCastInTpl(ast->getLhs()) or CanCastInTpl(TypeOfIdentAst(ast->getLhs())))
+		{
+			const auto LhsEval = evalTplExpr(ast->getLhs());
+			if(CanCastInNum(ast->getRhs()) or CanCastInNum(TypeOfIdentAst(ast->getRhs())))
+			{
+				assert(CanCastInNum(ast->getRhs()) or CanCastInNum(TypeOfIdentAst(ast->getRhs())));
+				const auto RhsEval = evalNumExpr(ast->getRhs());
+				if(ast->getOp() == "IdxAt")
+				{
+					const auto res = LhsEval.at(RhsEval);
+					if(CanCastInNum(res))
+					{
+						return dynamic_cast<ast::NumberAst*>(res)->getVal();
+					}
+				}
+			}
+			assert(0 && "something wrong");
+		}
 		bool isLhsNumber = ast->getLhs()->getID() == ast::NumberID,
 			 isRhsNumber = ast->getRhs()->getID() == ast::NumberID,
 			 isLhsMonoExp = ast->getLhs()->getID() == ast::MonoExpID,
@@ -784,14 +857,14 @@ struct AstEval {
 			 isRhsIdent = ast->getRhs()->getID() == ast::IdentID;
 		const auto LhsEval =
 			isLhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getLhs())) : \
-			isLhsMonoExp ? evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getLhs())) : \
-			isLhsBinExp ? evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
+			isLhsMonoExp ? evalNumMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getLhs())) : \
+			isLhsBinExp ? evalNumBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
 			isLhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getLhs())) : \
 			-1; // dummy
 		const auto RhsEval =
 			isRhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getRhs())) : \
-			isRhsMonoExp ? evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getRhs())) : \
-			isRhsBinExp ? evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getRhs())) : \
+			isRhsMonoExp ? evalNumMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getRhs())) : \
+			isRhsBinExp ? evalNumBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getRhs())) : \
 			isRhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getRhs())) : \
 			-1; // dummy
 		if(ast->getOp() == "+") { return LhsEval + RhsEval; }
@@ -814,7 +887,7 @@ struct AstEval {
 		return 0;
 	}
 
-	std::int_fast64_t evalMonoExpAst(ast::MonoExpAst* ast)
+	std::int_fast64_t evalNumMonoExpAst(ast::MonoExpAst* ast)
 	{
 		bool isLhsNumber = ast->getLhs()->getID() == ast::NumberID,
 			 isLhsMonoExp = ast->getLhs()->getID() == ast::MonoExpID,
@@ -823,8 +896,8 @@ struct AstEval {
 			 
 		const auto LhsEval =
 			isLhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getLhs())) : \
-			isLhsMonoExp ? evalMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getLhs())) : \
-			isLhsBinExp ? evalBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
+			isLhsMonoExp ? evalNumMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getLhs())) : \
+			isLhsBinExp ? evalNumBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
 			isLhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getLhs())) : \
 			-1; // dummy
 		if(ast->getOp() == "!") { return static_cast<std::int_fast64_t>(! LhsEval); }
@@ -835,6 +908,88 @@ struct AstEval {
 			assert(0 && "no match");
 		}
 		return 0;
+	}
+
+	// ================
+	//      tuple
+	// ================
+
+	std::vector<ast::BaseAst*> evalTplExpr(ast::BaseAst* ast)
+	{
+		std::vector<ast::BaseAst*> res{};
+		std::vector<ast::BaseAst*> Ary{};
+
+		if(ast->getID() == ast::IdentID)
+		{
+			const auto& name = dynamic_cast<ast::IdentAst*>(ast)->getIdent();
+			bool flg = true;
+
+			assert(valsSize >= 1);
+			for(std::int_fast32_t i = valsSize - 1; i >= curLower; i--)
+			{
+				if(vals[i].find(name) != std::end(vals[i]))
+				{
+					if(CanCastInTpl(vals[i].at(name)))
+					{
+						Ary = evalTplExpr(vals[i].at(name));
+						flg = false;
+						break;
+					}
+					else
+					{
+						assert(0);
+					}
+				}
+			}
+
+			if(flg)
+			{
+				assert(0 && "unknown ident");
+			}
+		}
+		else
+		{
+			Ary = dynamic_cast<ast::TupleAst*>(ast)->getAry();
+		}
+
+		assert(not Ary.empty());
+		for(const auto& elm : Ary)
+		{
+			if(elm->getID() == ast::IdentID)
+			{
+				if(TypeOfIdentAst(elm) == ast::NumberID)
+				{
+					res.push_back(new ast::NumberAst(evalNumExpr(elm)));
+				}
+				else if(TypeOfIdentAst(elm) == ast::StringID)
+				{
+					res.push_back(new ast::StringAst(evalStrExpr(elm)));
+				}
+				else if(TypeOfIdentAst(elm) == ast::TupleID)
+				{
+					res.push_back(new ast::TupleAst(evalTplExpr(elm)));
+				}
+				else assert(0 && "unknown type");
+			}
+			else
+			{
+				if(CanCastInNum(elm))
+				{
+					res.push_back(new ast::NumberAst(evalNumExpr(elm)));
+				}
+				else if(CanCastInStr(elm))
+				{
+					res.push_back(new ast::StringAst(evalStrExpr(elm)));
+				}
+				else if(CanCastInTpl(elm))
+				{
+					res.push_back(new ast::TupleAst(evalTplExpr(elm)));
+				}
+				else assert(0 && "unknown type");
+			}
+		}
+
+		return res;
 	}
 };
 
