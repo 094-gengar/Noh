@@ -1,0 +1,14 @@
+fn main() {
+	print("fibonacchi seq:");
+	for i in 1..11 {
+		print(fib(i));
+	}
+}
+
+fn fib(n) {
+	if n == 0 || n == 1 {
+		return n;
+	} else {
+		return fib(n - 1) + fib(n - 2);
+	}
+}
