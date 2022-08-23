@@ -17,6 +17,7 @@ namespace eval {
 struct AstEval {
 	bool ExitFlag = false;
 	bool ReturnFlag = false;
+	ast::BaseAst* ReturnValue = nullptr;
 	bool BreakFlag = false;
 	bool ContinueFlag = false;
 	std::int_fast32_t valsSize, FuncRecSize, curLower;
@@ -221,45 +222,110 @@ struct AstEval {
 	//       func
 	// ================
 
-	void evalFuncAst(ast::FuncAst*& ast, std::vector<ast::BaseAst*> params)
+	ast::BaseAst* evalFuncAst(ast::FuncAst*& ast, std::vector<ast::BaseAst*> params)
 	{
-		if(ExitFlag)return;
+		if(ExitFlag)return nullptr;
 		const auto& siz = params.size();
 		assert(siz == ast->getParamNames().size());
 		auto paramNames = ast->getParamNames();
 
 		vals.emplace_back(std::unordered_map<std::string, ast::BaseAst*>{});
 		valsSize++;
-		auto tmpLower = curLower;
-		curLower = valsSize - 1;
 
 		for(size_t i{}; i < siz; i++)
 		{
 			auto tmp = new ast::AssignAst{paramNames[i]};
+			if(params[i]->getID() == ast::CallID)
+			{
+				while(params[i]->getID() == ast::CallID)
+				{
+					params[i] = evalCallAst(dynamic_cast<ast::CallAst*>(params[i]));
+				}
+			}
 			tmp->Val = params[i];
 			evalAssignAst(tmp);
 		}
+
+		auto tmpLower = curLower;
+		curLower = valsSize - 1;
+
+
+		ast::BaseAst* Ret = new ast::NumberAst(0);
 
 		{
 			for(auto& stmts : ast->getInst())
 			{
 				evalStmts(stmts);
-				if(ExitFlag)return;
-				if(ReturnFlag) { ReturnFlag = false; break; }
+				if(ExitFlag)return nullptr;
+				if(ReturnFlag)
+				{
+					if(ReturnValue)
+					{
+						Ret = ReturnValue;
+						ReturnValue = nullptr;
+					}
+					ReturnFlag = false;
+					break;
+				}
 			}
+		}
+
+		if(Ret->getID() == ast::IdentID)
+		{
+			if(TypeOfIdentAst(Ret) == ast::NumberID)
+			{
+				Ret = new ast::NumberAst(evalNumExpr(Ret));
+			}
+			else if(TypeOfIdentAst(Ret) == ast::StringID)
+			{
+				Ret = new ast::StringAst(evalStrExpr(Ret));
+			}
+			else if(TypeOfIdentAst(Ret) == ast::TupleID)
+			{
+				Ret = new ast::TupleAst(evalTplExpr(Ret));
+			}
+			else assert(0 && "unknown type");
+		}
+		else
+		{
+			if(CanCastInNum(Ret))
+			{
+				Ret = new ast::NumberAst(evalNumExpr(Ret));
+			}
+			else if(CanCastInStr(Ret))
+			{
+				Ret = new ast::StringAst(evalStrExpr(Ret));
+			}
+			else if(CanCastInTpl(Ret))
+			{
+				Ret = new ast::TupleAst(evalTplExpr(Ret));
+			}
+			else if(Ret->getID() == ast::CallID)
+			{
+				Ret = evalCallAst(dynamic_cast<ast::CallAst*>(Ret));
+			}
+			else assert(0 && "unknown type");
 		}
 
 		vals.back().clear();
 		vals.pop_back();
 		valsSize--;
 		curLower = tmpLower;
+		return Ret;
 	}
 
-	void evalCallAst(ast::CallAst* ast)
+	ast::BaseAst* evalCallAst(ast::CallAst* ast)
 	{
-		if(ExitFlag)return;
+		if(ExitFlag)return nullptr;
 		const auto& fnName = ast->getFuncName();
-		evalFuncAst(funcs[fnName], ast->getParams());
+		if(funcs.find(fnName) == std::end(funcs) and ast->getParams().size() == 1)
+		{
+			return new ast::NumberAst(evalNumBinaryExpAst(new ast::BinaryExpAst(
+					std::string("IdxAt"),
+					new ast::IdentAst(ast->getFuncName()),
+					ast->getParams().front())));
+		}
+		return evalFuncAst(funcs[fnName], ast->getParams());
 	}
 
 	// ================
@@ -314,11 +380,20 @@ struct AstEval {
 		if(builtinName == "break")BreakFlag = true;
 		else if(builtinName == "continue")ContinueFlag = true;
 		else if(builtinName == "exit")ExitFlag = true;
-		else if(builtinName == "return")ReturnFlag = true;
+		else if(builtinName == "return")
+		{
+			ReturnFlag = true;
+			ReturnValue = ast->getArgs().front();
+		}
 		else if(builtinName == "print")
 		{
-			for(auto& arg : ast->Args)
+			for(auto arg : ast->Args)
 			{
+				if(arg->getID() == ast::CallID)
+				{
+					arg = evalCallAst(dynamic_cast<ast::CallAst*>(arg));
+				}
+				
 				if(arg->getID() == ast::IdentID)
 				{
 					if(TypeOfIdentAst(arg) == ast::NumberID)
@@ -415,6 +490,13 @@ struct AstEval {
 	{
 		if(ExitFlag)return;
 		assert(builtin.find(ast->getName()) == std::end(builtin));
+		if(ast->getVal()->getID() == ast::CallID)
+		{
+			while(ast->getVal()->getID() == ast::CallID)
+			{
+				ast->getVal() = evalCallAst(dynamic_cast<ast::CallAst*>(ast->getVal()));
+			}
+		}
 		const auto& valAst = ast->getVal();
 		assert(not vals.empty());
 
@@ -486,6 +568,13 @@ struct AstEval {
 	{
 		if(ExitFlag)return;
 		assert(builtin.find(ast->getName()) == std::end(builtin));
+		if(ast->getVal()->getID() == ast::CallID)
+		{
+			while(ast->getVal()->getID() == ast::CallID)
+			{
+				ast->getVal() = evalCallAst(dynamic_cast<ast::CallAst*>(ast->getVal()));
+			}
+		}
 		const auto& valAst = ast->getVal();
 		assert(not vals.empty());
 
@@ -853,19 +942,36 @@ struct AstEval {
 			 isRhsMonoExp = ast->getRhs()->getID() == ast::MonoExpID,
 			 isLhsBinExp = ast->getLhs()->getID() == ast::BinaryExpID,
 			 isRhsBinExp = ast->getRhs()->getID() == ast::BinaryExpID,
+			 isLhsCall = ast->getLhs()->getID() == ast::CallID,
+			 isRhsCall = ast->getRhs()->getID() == ast::CallID,
 			 isLhsIdent = ast->getLhs()->getID() == ast::IdentID,
 			 isRhsIdent = ast->getRhs()->getID() == ast::IdentID;
+
+		
+		if(isLhsCall)
+		{
+			auto lhseval = evalCallAst(dynamic_cast<ast::CallAst*>(ast->getLhs()));
+			assert(CanCastInNum(lhseval));
+		}
+		if(isRhsCall)
+		{
+			auto rhseval = evalCallAst(dynamic_cast<ast::CallAst*>(ast->getRhs()));
+			assert(CanCastInNum(rhseval));
+		}
+
 		const auto LhsEval =
 			isLhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getLhs())) : \
 			isLhsMonoExp ? evalNumMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getLhs())) : \
 			isLhsBinExp ? evalNumBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getLhs())) : \
 			isLhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getLhs())) : \
+			isLhsCall ? evalNumExpr(evalCallAst(dynamic_cast<ast::CallAst*>(ast->getLhs()))) : \
 			-1; // dummy
 		const auto RhsEval =
 			isRhsNumber ? evalNumberAst(dynamic_cast<ast::NumberAst*>(ast->getRhs())) : \
 			isRhsMonoExp ? evalNumMonoExpAst(dynamic_cast<ast::MonoExpAst*>(ast->getRhs())) : \
 			isRhsBinExp ? evalNumBinaryExpAst(dynamic_cast<ast::BinaryExpAst*>(ast->getRhs())) : \
 			isRhsIdent ? evalNumExpr(dynamic_cast<ast::IdentAst*>(ast->getRhs())) : \
+			isRhsCall ? evalNumExpr(evalCallAst(dynamic_cast<ast::CallAst*>(ast->getRhs()))) : \
 			-1; // dummy
 		if(ast->getOp() == "+") { return LhsEval + RhsEval; }
 		else if(ast->getOp() == "-") { return LhsEval - RhsEval; }
@@ -891,6 +997,7 @@ struct AstEval {
 	{
 		bool isLhsNumber = ast->getLhs()->getID() == ast::NumberID,
 			 isLhsMonoExp = ast->getLhs()->getID() == ast::MonoExpID,
+			 isLhsCall = ast->getLhs()->getID() == ast::CallID,
 			 isLhsBinExp = ast->getLhs()->getID() == ast::BinaryExpID,
 			 isLhsIdent = ast->getLhs()->getID() == ast::IdentID;
 			 

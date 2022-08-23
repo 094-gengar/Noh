@@ -11,6 +11,7 @@ namespace Noh {
 namespace ast {
 enum AstID {
 	BaseID,
+	VoidID,
 	FuncID,
 	CallID,
 	ModuleID,
@@ -40,11 +41,16 @@ public:
 	AstID getID() const { return this->id; }
 };
 
+class VoidAst : public BaseAst {
+	VoidAst(int x) : BaseAst(AstID::VoidID) {}
+};
+
 class FuncAst : public BaseAst {
 public:
 	std::string Name;
 	std::vector<std::string> ParamNames;
 	std::vector<BaseAst*> Inst;
+	BaseAst* RetValue;
 
 	FuncAst(const std::string& name) : BaseAst(AstID::FuncID), Name(name)
 	{
@@ -53,11 +59,13 @@ public:
 	~FuncAst()
 	{
 		for(auto& ptr : this->Inst) { delete ptr; }
+		delete RetValue;
 	}
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::FuncID; }
 	std::string& getName() { return this->Name; }
 	std::vector<std::string>& getParamNames() { return this->ParamNames; }
 	std::vector<BaseAst*>& getInst() { return this->Inst; }
+	BaseAst*& getRetValue() { return this->RetValue; }
 };
 
 class CallAst : public BaseAst {
@@ -200,7 +208,7 @@ public:
 	~AssignAst() { delete this->Val; }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::AssignID; }
 	std::string& getName(void) { return this->Name; }
-	BaseAst* getVal() { return this->Val; }
+	BaseAst*& getVal() { return this->Val; }
 };
 
 class ReAssignAst : public BaseAst {
@@ -215,7 +223,7 @@ public:
 	~ReAssignAst() { delete this->Val; }
 	static inline bool classOf(const BaseAst* base) { return base->getID() == AstID::ReAssignID; }
 	std::string& getName(void) { return this->Name; }
-	BaseAst* getVal() { return this->Val; }	
+	BaseAst*& getVal() { return this->Val; }	
 };
 
 class IfStmtAst : public BaseAst {

@@ -62,15 +62,16 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 
 		Call = Ident[_val = ph::new_<ast::CallAst>(_1)]
 			>> '(' >> -(Expr[ph::push_back(ph::at_c<1>(*_val), _1)]
-			>> *(',' >> Expr[ph::push_back(ph::at_c<1>(*_val), _1)])) >> ')' >> ';';
+			>> *(',' >> Expr[ph::push_back(ph::at_c<1>(*_val), _1)])) >> ')';
 
-		Stmt = Builtin | IfStmt | WhileStmt | ForStmt | Assign | ReAssign | Call;
+		Stmt = Builtin | IfStmt | WhileStmt | ForStmt | Assign | ReAssign | (Call >> ';');
 
 		Builtin =
 			 (("break" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("break")])
 			| ("continue" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("continue")])
 			| ("exit" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("exit")])
-			| ("return" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("return")])
+			| ("return" >> qi::eps[_val = ph::new_<ast::BuiltinAst>("return")]
+				>> Expr[ph::push_back(ph::at_c<1>(*_val), _1)])
 			| ("print" >> qi::char_('(') >> qi::eps[_val = ph::new_<ast::BuiltinAst>("print")]
 				>> Expr[ph::push_back(ph::at_c<1>(*_val), _1)]
 				>> *(',' >> Expr[ph::push_back(ph::at_c<1>(*_val), _1)])
@@ -96,9 +97,9 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 			>> '{' >> *Stmt[ph::push_back(ph::at_c<2>(*_val), _1)] >> '}';
 
 		Factor = qi::int_[_val = ph::new_<ast::NumberAst>(_1)]
+			| Call[_val = _1]
 			| Ident[_val = ph::new_<ast::IdentAst>(_1)]
 			| '(' >> NumExpr[_val = _1] >> ')';
-			// | Call
 		E1 = Factor[_val = _1]
 			| ('!' >> Factor[_val = ph::new_<ast::MonoExpAst>("!", _1)])
 			| ('-' >> Factor[_val = ph::new_<ast::MonoExpAst>("-", _1)])
@@ -123,9 +124,9 @@ struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
 		NumExpr = E5;
 
 		Expr =
-			((TupleExpr[_val = _1] | Ident[_val = ph::new_<ast::IdentAst>(_1)]) >>
+			NumExpr[_val = _1]
+			| ((TupleExpr[_val = _1] | Ident[_val = ph::new_<ast::IdentAst>(_1)]) >>
 				'(' >> Expr[_val = ph::new_<ast::BinaryExpAst>("IdxAt", _val, _1)] >> ')')
-			| NumExpr[_val = _1]
 			| StrExpr[_val = _1]
 			| TupleExpr[_val = _1];
 	}
