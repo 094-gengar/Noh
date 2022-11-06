@@ -53,18 +53,18 @@ int main(int argc, const char* argv[])
 			std::string input{}, s;
 
 			std::ifstream fIn(fName);
-			if(not fIn.is_open())
+			if (not fIn.is_open())
 			{
 				std::cerr << "could not open the file: '" << fName << "'" << std::endl;
 				return EXIT_FAILURE;
 			}
-			if(std::filesystem::path(fName).extension() != ".noh")
+			if (std::filesystem::path(fName).extension() != ".noh")
 			{
 				std::cerr << "invalid extension: '" << fName << "'" << std::endl;
 				return EXIT_FAILURE;
 			}
 
-			while(std::getline(fIn, s))
+			while (std::getline(fIn, s))
 			{
 				input += s; input += '\n';
 			}
@@ -81,11 +81,12 @@ int main(int argc, const char* argv[])
 				res
 			);
 
-			if(success and it == std::end(input))
+			if (success and it == std::end(input))
 			{
 				Noh::eval::AstEval asteval(res);
 			}
-			else {
+			else
+			{
 				std::cout << "parse failed" << std::endl;
 			}
 		}

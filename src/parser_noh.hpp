@@ -15,26 +15,26 @@ namespace parser {
 
 template<class Iterator, class Skipper>
 struct Calc : qi::grammar<Iterator, ast::ModuleAst*(), Skipper> {
-	qi::rule<Iterator, std::string(), Skipper> Ident;
-	qi::rule<Iterator, std::string()> _String;
-	qi::rule<Iterator, ast::BaseAst*(), Skipper> StrExpr;
-	qi::rule<Iterator, ast::FuncAst*(), Skipper> Func;
-	qi::rule<Iterator, ast::CallAst*(), Skipper> Call;
-	qi::rule<Iterator, ast::ModuleAst*(), Skipper> Module;
-	qi::rule<Iterator, ast::BaseAst*(), Skipper> Stmt;
-	qi::rule<Iterator, ast::BuiltinAst*(), Skipper> Builtin;
-	qi::rule<Iterator, ast::AssignAst*(), Skipper> Assign;
-	qi::rule<Iterator, ast::ReAssignAst*(), Skipper> ReAssign;
-	qi::rule<Iterator, ast::IfStmtAst*(), Skipper> IfStmt;
-	qi::rule<Iterator, ast::WhileStmtAst*(), Skipper> WhileStmt;
-	qi::rule<Iterator, ast::RangeAst*(), Skipper> Range;
-	qi::rule<Iterator, ast::ForStmtAst*(), Skipper> ForStmt;
-	qi::rule<Iterator, std::vector<ast::BaseAst*>(), Skipper> Stmts;
-	qi::rule<Iterator, ast::BaseAst*(), Skipper> Factor;
-	qi::rule<Iterator, ast::BaseAst*(), Skipper> NumExpr, E1, E2, E3, E4, E5;
-	qi::rule<Iterator, std::vector<ast::BaseAst*>(), Skipper> _TupleExpr;
-	qi::rule<Iterator, ast::BaseAst*(), Skipper> TupleExpr;
-	qi::rule<Iterator, ast::BaseAst*(), Skipper> Expr;
+	qi::rule <Iterator, std::string(), Skipper> Ident;
+	qi::rule <Iterator, std::string()> _String;
+	qi::rule <Iterator, ast::BaseAst*(), Skipper> StrExpr;
+	qi::rule <Iterator, ast::FuncAst*(), Skipper> Func;
+	qi::rule <Iterator, ast::CallAst*(), Skipper> Call;
+	qi::rule <Iterator, ast::ModuleAst*(), Skipper> Module;
+	qi::rule <Iterator, ast::BaseAst*(), Skipper> Stmt;
+	qi::rule <Iterator, ast::BuiltinAst*(), Skipper> Builtin;
+	qi::rule <Iterator, ast::AssignAst*(), Skipper> Assign;
+	qi::rule <Iterator, ast::ReAssignAst*(), Skipper> ReAssign;
+	qi::rule <Iterator, ast::IfStmtAst*(), Skipper> IfStmt;
+	qi::rule <Iterator, ast::WhileStmtAst*(), Skipper> WhileStmt;
+	qi::rule <Iterator, ast::RangeAst*(), Skipper> Range;
+	qi::rule <Iterator, ast::ForStmtAst*(), Skipper> ForStmt;
+	qi::rule <Iterator, std::vector<ast::BaseAst*>(), Skipper> Stmts;
+	qi::rule <Iterator, ast::BaseAst*(), Skipper> Factor;
+	qi::rule <Iterator, ast::BaseAst*(), Skipper> NumExpr, E1, E2, E3, E4, E5;
+	qi::rule <Iterator, std::vector<ast::BaseAst*>(), Skipper> _TupleExpr;
+	qi::rule <Iterator, ast::BaseAst*(), Skipper> TupleExpr;
+	qi::rule <Iterator, ast::BaseAst*(), Skipper> Expr;
 
 	Calc() : Calc::base_type(Module)
 	{
